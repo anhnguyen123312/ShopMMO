@@ -162,14 +162,17 @@ pub enum ServiceError {
     #[error("Resource not found: {0}")]
     NotFound(String),
 
+    #[error("Bad request: {0}")]
+    BadRequest(String),
+
     #[error("Validation failed: {0}")]
     ValidationFailed(String),
 
     #[error("Insufficient balance")]
     InsufficientBalance,
 
-    #[error("Unauthorized access")]
-    Unauthorized,
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
 
     #[error("Database operation failed: {0}")]
     DatabaseError(String),
@@ -183,11 +186,12 @@ impl From<ServiceError> for ApiError {
     fn from(err: ServiceError) -> Self {
         match err {
             ServiceError::NotFound(msg) => ApiError::not_found(msg),
+            ServiceError::BadRequest(msg) => ApiError::bad_request(msg),
             ServiceError::ValidationFailed(msg) => ApiError::bad_request(msg),
             ServiceError::InsufficientBalance => {
                 ApiError::bad_request("Insufficient balance for this operation")
             }
-            ServiceError::Unauthorized => ApiError::unauthorized("Access denied"),
+            ServiceError::Unauthorized(msg) => ApiError::unauthorized(msg),
             ServiceError::DatabaseError(msg) => ApiError::database(msg),
             ServiceError::InternalError(msg) => ApiError::internal(msg),
         }

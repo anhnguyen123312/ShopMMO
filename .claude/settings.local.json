@@ -3,7 +3,11 @@
     "allow": [
       "Skill(superpowers:brainstorming)",
       "Skill(superpowers:brainstorming:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo clean:*)",
+      "Bash(rustup update:*)",
+      "Bash(rustc:*)"
     ]
   }
 }

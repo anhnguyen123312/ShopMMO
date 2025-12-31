@@ -23,10 +23,29 @@ pub struct AuthUser {
     /// User's MongoDB ObjectId
     pub user_id: String,
 
+    /// User's wallet ID
+    pub wallet_id: String,
+
     /// User's email
     pub email: String,
 
     /// User's role
+    pub role: String,
+}
+
+/// Admin user extractor (requires ADMIN or SUPER_ADMIN role)
+#[derive(Debug, Clone)]
+pub struct AdminUser {
+    /// Admin's user ID
+    pub user_id: String,
+
+    /// Admin's wallet ID
+    pub wallet_id: String,
+
+    /// Admin's email
+    pub email: String,
+
+    /// Admin's role
     pub role: String,
 }
 
@@ -120,6 +139,7 @@ where
             // Create AuthUser and add to request extensions
             let auth_user = AuthUser {
                 user_id: claims.sub.clone(),
+                wallet_id: claims.wallet_id.clone(),
                 email: claims.email.clone(),
                 role: claims.role.clone(),
             };
@@ -151,6 +171,38 @@ impl actix_web::FromRequest for AuthUser {
     ) -> Self::Future {
         match req.extensions().get::<AuthUser>() {
             Some(user) => ready(Ok(user.clone())),
+            None => ready(Err(ErrorUnauthorized(
+                ApiError::unauthorized("User not authenticated").to_string(),
+            ))),
+        }
+    }
+}
+
+/// Extractor for admin user (requires ADMIN or SUPER_ADMIN role)
+impl actix_web::FromRequest for AdminUser {
+    type Error = Error;
+    type Future = Ready<Result<Self, Self::Error>>;
+
+    fn from_request(
+        req: &actix_web::HttpRequest,
+        _: &mut actix_web::dev::Payload,
+    ) -> Self::Future {
+        match req.extensions().get::<AuthUser>() {
+            Some(user) => {
+                // Check if user has admin role
+                if user.role == "ADMIN" || user.role == "SUPER_ADMIN" {
+                    ready(Ok(AdminUser {
+                        user_id: user.user_id.clone(),
+                        wallet_id: user.wallet_id.clone(),
+                        email: user.email.clone(),
+                        role: user.role.clone(),
+                    }))
+                } else {
+                    ready(Err(ErrorUnauthorized(
+                        ApiError::unauthorized("Admin access required").to_string(),
+                    )))
+                }
+            }
             None => ready(Err(ErrorUnauthorized(
                 ApiError::unauthorized("User not authenticated").to_string(),
             ))),

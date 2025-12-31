@@ -16,6 +16,10 @@ pub struct TokenClaims {
     /// Subject (user ID)
     pub sub: String,
 
+    /// User's wallet ID
+    #[serde(default)]
+    pub wallet_id: String,
+
     /// User email
     pub email: String,
 
