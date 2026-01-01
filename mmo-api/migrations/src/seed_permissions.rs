@@ -3,12 +3,13 @@
 //! Run with: cargo run --bin seed_permissions
 
 use mongodb::{
-    bson::{doc, oid::ObjectId},
+    bson::{doc, oid::ObjectId, DateTime as BsonDateTime},
     Client, Collection,
 };
 use tokio::main;
+use futures::stream::TryStreamExt;
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct Permission {
     #[serde(rename = "_id")]
     id: Option<ObjectId>,
@@ -23,7 +24,7 @@ struct Permission {
     updated_at: mongodb::bson::DateTime,
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct Role {
     #[serde(rename = "_id")]
     id: Option<ObjectId>,
@@ -237,11 +238,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Inserted {} permissions", insert_result.inserted_ids.len());
 
     // Get permission IDs for roles
-    let all_permissions = permissions_collection
-        .find(doc! {}, None)
-        .await?
-        .collect::<Result<Vec<_>, _>>()
-        .await?;
+    let cursor = permissions_collection.find(doc! {}).await?;
+    let all_permissions: Vec<Permission> = cursor.try_collect().await.map_err(|e| format!("Failed to collect: {}", e))?;
 
     let buyer_perm_names = vec!["products:read", "orders:read", "orders:create", "wallets:read"];
     let seller_perm_names = vec!["products:read", "products:create", "products:update", "products:delete", "orders:read", "orders:update", "wallets:read", "wallets:manage"];
@@ -347,34 +345,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\n3. Creating indexes...");
 
+    use mongodb::IndexModel;
+
     // Permissions indexes
-    permissions_collection
-        .create_index(doc! { "name": 1 }, None)
-        .await?;
-    permissions_collection
-        .create_index(doc! { "resource": 1, "action": 1 }, None)
-        .await?;
-    permissions_collection
-        .create_index(doc! { "category": 1 }, None)
-        .await?;
-    permissions_collection
-        .create_index(doc! { "is_active": 1 }, None)
-        .await?;
+    let perm_indexes = vec![
+        IndexModel::builder().keys(doc! { "name": 1 }).build(),
+        IndexModel::builder().keys(doc! { "resource": 1, "action": 1 }).build(),
+        IndexModel::builder().keys(doc! { "category": 1 }).build(),
+        IndexModel::builder().keys(doc! { "is_active": 1 }).build(),
+    ];
+    permissions_collection.create_indexes(perm_indexes).await?;
     println!("   Permissions indexes created");
 
     // Roles indexes
-    roles_collection
-        .create_index(doc! { "name": 1 }, None)
-        .await?;
-    roles_collection
-        .create_index(doc! { "level": 1 }, None)
-        .await?;
-    roles_collection
-        .create_index(doc! { "is_active": 1 }, None)
-        .await?;
-    roles_collection
-        .create_index(doc! { "is_system": 1 }, None)
-        .await?;
+    let role_indexes = vec![
+        IndexModel::builder().keys(doc! { "name": 1 }).build(),
+        IndexModel::builder().keys(doc! { "level": 1 }).build(),
+        IndexModel::builder().keys(doc! { "is_active": 1 }).build(),
+        IndexModel::builder().keys(doc! { "is_system": 1 }).build(),
+    ];
+    roles_collection.create_indexes(role_indexes).await?;
     println!("   Roles indexes created");
 
     // ========================================================================
