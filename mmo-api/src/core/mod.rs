@@ -5,11 +5,13 @@
 //! - Standard API response structures
 //! - Logging configuration
 //! - Input validation utilities
+//! - Ownership check utilities
 
 pub mod errors;
 pub mod logger;
 pub mod response;
 pub mod validator;
+pub mod ownership;
 
 // Create error module alias for backward compatibility
 pub use errors as error;
