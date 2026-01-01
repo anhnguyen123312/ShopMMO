@@ -17,13 +17,14 @@ use super::domain::{RefreshToken, User};
 #[derive(Clone)]
 pub struct UserRepository {
     collection: Collection<User>,
+    db: Arc<MongoDB>,
 }
 
 impl UserRepository {
     /// Creates a new user repository
     pub fn new(db: Arc<MongoDB>) -> Self {
         let collection = db.database().collection::<User>(collections::USERS);
-        Self { collection }
+        Self { collection, db }
     }
 
     /// Creates a new user
@@ -149,6 +150,29 @@ impl UserRepository {
             )
             .await?;
         Ok(())
+    }
+
+    /// Check if a role exists in the roles collection
+    ///
+    /// # Arguments
+    /// * `role_name` - Role name to check
+    ///
+    /// # Returns
+    /// * `Result<bool, DbError>` - true if exists
+    pub async fn role_exists(&self, role_name: &str) -> Result<bool, DbError> {
+        let roles_collection = self
+            .db
+            .database()
+            .collection::<mongodb::bson::Document>("roles");
+
+        let count = roles_collection
+            .count_documents(doc! {
+                "name": role_name,
+                "is_active": true
+            })
+            .await?;
+
+        Ok(count > 0)
     }
 }
 

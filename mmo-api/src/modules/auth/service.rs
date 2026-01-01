@@ -337,23 +337,40 @@ impl AuthService {
             .map_err(|e| ServiceError::DatabaseError(e.to_string()))?
             .ok_or_else(|| ServiceError::NotFound("User not found".to_string()))?;
 
-        // Validate roles
-        let valid_roles = ["BUYER", "SELLER", "ADMIN", "SUPER_ADMIN"];
-        for role in &roles {
-            if !valid_roles.contains(&role.as_str()) {
+        // Validate roles exist in database (dynamic roles, not hardcoded)
+        for role_name in &roles {
+            let role_exists = self
+                .user_repo
+                .role_exists(role_name)
+                .await
+                .map_err(|e| ServiceError::DatabaseError(e.to_string()))?;
+
+            if !role_exists {
                 return Err(ServiceError::ValidationFailed(format!(
-                    "Invalid role: {}. Valid roles are: {}",
-                    role,
-                    valid_roles.join(", ")
+                    "Role '{}' does not exist. Please create it first via /api/permissions/roles",
+                    role_name
                 )));
             }
         }
 
         // Determine primary role (highest level)
-        let role_priority = [("SUPER_ADMIN", 3), ("ADMIN", 2), ("SELLER", 1), ("BUYER", 0)];
+        // For now, use priority based on known system roles
+        let role_priority = [
+            ("SUPER_ADMIN", 4),
+            ("ADMIN", 3),
+            ("MODERATOR", 2),
+            ("SELLER", 1),
+            ("BUYER", 0),
+        ];
         let primary_role = roles
             .iter()
-            .max_by_key(|r| role_priority.iter().find(|(name, _)| name == r).map(|(_, p)| p).unwrap_or(&0))
+            .max_by_key(|r| {
+                role_priority
+                    .iter()
+                    .find(|(name, _)| name == r)
+                    .map(|(_, p)| p)
+                    .unwrap_or(&0)
+            })
             .unwrap_or(&String::from("BUYER"))
             .clone();
 

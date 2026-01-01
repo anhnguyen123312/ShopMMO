@@ -79,6 +79,9 @@ async fn main() -> std::io::Result<()> {
         Arc::new(config.clone()),
     ));
     let wallet_service = Arc::new(modules::wallet::WalletService::new(wallet_repo));
+    let permission_service = Arc::new(modules::permissions::service::PermissionService::new(
+        mongodb.database().clone(),
+    ));
 
     // Server address
     let server_host = config.server.host.clone();
@@ -103,6 +106,7 @@ async fn main() -> std::io::Result<()> {
             // App data (dependency injection)
             .app_data(web::Data::new(auth_service.clone()))
             .app_data(web::Data::new(wallet_service.clone()))
+            .app_data(web::Data::new(permission_service.clone()))
             .app_data(web::Data::from(Arc::new(config.clone())))
             // Health check endpoint
             .route("/health", web::get().to(health_check))
@@ -115,7 +119,8 @@ async fn main() -> std::io::Result<()> {
                     .service(
                         web::scope("")
                             .wrap(middleware::AuthMiddleware::new(config.clone()))
-                            .configure(modules::wallet::routes::configure),
+                            .configure(modules::wallet::routes::configure)
+                            .configure(modules::permissions::routes::configure),
                     ),
             )
             // Swagger UI

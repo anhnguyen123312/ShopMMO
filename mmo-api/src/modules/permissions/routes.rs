@@ -1,6 +1,6 @@
 //! Permission routes
 //!
-//! Route configuration for permission APIs.
+//! Route configuration for permission and role management APIs.
 
 use actix_web::web;
 
@@ -9,12 +9,17 @@ use super::handler::*;
 /// Configure permission routes
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
-        web::scope("/api/v1/permissions")
+        web::scope("/permissions")
+            // Permission endpoints
             .route("", web::get().to(list_permissions))
-            // TODO: Add more routes as needed:
-            // .route("", web::post().to(create_permission))
-            // .route("/{id}", web::get().to(get_permission))
-            // .route("/{id}", web::put().to(update_permission))
-            // .route("/{id}", web::delete().to(delete_permission))
+            // Role management endpoints
+            .service(
+                web::scope("/roles")
+                    .route("", web::post().to(create_role))
+                    .route("", web::get().to(list_roles))
+                    .route("/{role_name}", web::delete().to(delete_role))
+                    .route("/{role_name}/permissions", web::put().to(update_role_permissions))
+                    .route("/assign", web::post().to(assign_role))
+            ),
     );
 }

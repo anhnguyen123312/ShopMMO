@@ -45,7 +45,8 @@ impl utoipa::Modify for SecurityAddon {
     tags(
         (name = "Auth", description = "Authentication endpoints"),
         (name = "Wallet", description = "Wallet management endpoints"),
-        (name = "Admin", description = "Admin-only endpoints")
+        (name = "Admin", description = "Admin-only endpoints"),
+        (name = "Permissions", description = "Permission and role management endpoints")
     ),
     paths(
         // Auth endpoints
@@ -78,6 +79,14 @@ impl utoipa::Modify for SecurityAddon {
         crate::modules::wallet::handler::get_admin_logs,
         crate::modules::wallet::handler::get_transaction_history,
         crate::modules::wallet::handler::process_auto_releases,
+
+        // Permission endpoints
+        crate::modules::permissions::handler::list_permissions,
+        crate::modules::permissions::handler::create_role,
+        crate::modules::permissions::handler::list_roles,
+        crate::modules::permissions::handler::update_role_permissions,
+        crate::modules::permissions::handler::delete_role,
+        crate::modules::permissions::handler::assign_role,
     ),
     components(
         schemas(
@@ -152,6 +161,14 @@ impl utoipa::Modify for SecurityAddon {
             crate::modules::wallet::domain::AdminOperation,
             crate::modules::wallet::domain::TargetType,
             crate::modules::wallet::domain::DepositStatus,
+
+            // Permission DTOs
+            crate::modules::permissions::dto::PermissionResponse,
+            crate::modules::permissions::dto::CreateRoleRequest,
+            crate::modules::permissions::dto::UpdateRolePermissionsRequest,
+            crate::modules::permissions::dto::AssignUserRoleRequest,
+            crate::modules::permissions::dto::RoleResponse,
+            crate::modules::permissions::dto::UserPermissionsResponse,
         ),
     ),
     modifiers(&SecurityAddon)

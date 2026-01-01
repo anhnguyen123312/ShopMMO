@@ -77,6 +77,10 @@ path = "migrations/src/seed_permissions.rs"
 name = "create_super_admin"
 path = "scripts/create_super_admin.rs"
 
+[[bin]]
+name = "seed_roles"
+path = "scripts/seed_roles.rs"
+
 [dev-dependencies]
 # Testing
 mockall = "0.13"

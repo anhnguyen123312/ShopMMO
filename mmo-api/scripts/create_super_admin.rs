@@ -119,6 +119,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = client.database("mmo_api");
     let users_collection: Collection<User> = db.collection("users");
 
+    // Verify SUPER_ADMIN role exists
+    let roles_collection: Collection<mongodb::bson::Document> = db.collection("roles");
+    let super_admin_role = roles_collection
+        .find_one(doc! { "name": "SUPER_ADMIN", "is_active": true })
+        .await?;
+
+    if super_admin_role.is_none() {
+        println!("\nWARNING: SUPER_ADMIN role not found in database!");
+        println!("Please run: cargo run --bin seed_roles");
+        println!("\nTo seed roles, run:");
+        println!("  MONGODB_URI='{}' cargo run --bin seed_roles", mongo_url);
+        return Err("SUPER_ADMIN role not found".into());
+    }
+    println!("SUPER_ADMIN role verified in database.");
+
     // Check if user already exists
     println!("\nChecking if user already exists...");
     let existing_user = users_collection
