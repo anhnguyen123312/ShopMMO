@@ -69,6 +69,10 @@ tokio-cron-scheduler = "0.13"
 # HTTP Client (for external APIs)
 reqwest = { version = "0.12", features = ["json"] }
 
+[[bin]]
+name = "seed_permissions"
+path = "migrations/src/seed_permissions.rs"
+
 [dev-dependencies]
 # Testing
 mockall = "0.13"
