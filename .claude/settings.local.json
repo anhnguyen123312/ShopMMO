@@ -14,7 +14,19 @@
       "Bash(curl:*)",
       "Bash(cargo build:*)",
       "Bash(lsof:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Skill(superpowers:using-superpowers)",
+      "Skill(superpowers:using-superpowers:*)",
+      "Bash(find:*)",
+      "*",
+      "Skill(superpowers:writing-plans)",
+      "Skill(superpowers:writing-plans:*)",
+      "Skill(superpowers:executing-plans)",
+      "Skill(superpowers:executing-plans:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo:*)"
     ]
   }
 }

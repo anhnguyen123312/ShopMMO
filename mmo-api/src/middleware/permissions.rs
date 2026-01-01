@@ -2,9 +2,9 @@
 //!
 //! Extracts user permissions from JWT and cache/DB for authorization.
 
-use actix_web::{dev::Payload, Error, FromRequest, HttpRequest};
+use actix_web::{dev::ServiceRequest, Error, FromRequest, HttpRequest, dev::Payload, HttpMessage};
 use futures::future::{ready, Ready};
-use std::sync::Arc;
+use std::collections::HashSet;
 
 use crate::modules::permissions::{cache::PermissionCache, repository::RoleRepository};
 use crate::database::mongodb::MongoDB;
@@ -30,14 +30,51 @@ pub struct AuthUserV2 {
     pub perm_version: u32,
 }
 
-/// Permission extractor function for actix-web-grants
+/// Permission extractor for actix-web-grants middleware
 ///
-/// This function is called by actix-web-grants middleware to get
-/// the list of permissions for the current user.
+/// This function extracts user roles from the request (populated by AuthMiddleware).
+/// Currently returns roles directly as permissions for simplicity.
 ///
-/// # Returns
-/// Vector of permission strings (e.g., ["products:read", "orders:create"])
-pub async fn extract_permissions(
+/// # Signature Required by actix-web-grants
+/// - Takes: `&ServiceRequest` (reference to incoming request)
+/// - Returns: `Result<HashSet<String>, Error>` (set of permission/role strings)
+///
+/// # Example
+/// ```rust
+/// use actix_web_grants::GrantsMiddleware;
+///
+/// HttpServer::new(|| {
+///     App::new()
+///         .wrap(GrantsMiddleware::with_extractor(extract_permissions))
+/// })
+/// ```
+pub async fn extract_permissions(req: &ServiceRequest) -> Result<HashSet<String>, Error> {
+    // Get AuthUser from request extensions (populated by AuthMiddleware)
+    match req.extensions().get::<crate::middleware::AuthUser>() {
+        Some(user) => {
+            // For now, return roles directly as permissions
+            // This allows us to use #[protect("ROLE_ADMIN")] style guards
+            // In production, you could fetch actual permissions from DB/cache here
+            tracing::debug!(
+                user_id = %user.user_id,
+                roles = ?user.roles,
+                "Extracted permissions for user"
+            );
+            Ok(user.roles.iter().cloned().collect())
+        }
+        None => {
+            tracing::warn!("No AuthUser found in request extensions");
+            // Return empty set instead of error - allows public routes to work
+            Ok(HashSet::new())
+        }
+    }
+}
+
+/// Fetch permissions from database
+///
+/// This function fetches actual permissions from the database (not just roles).
+/// It can be used in the future when we need fine-grained permission checking.
+async fn get_permissions_from_db(
     auth_user: &AuthUserV2,
     db: &MongoDB,
     redis_url: &str,
@@ -46,8 +83,18 @@ pub async fn extract_permissions(
     let cache = match PermissionCache::new(redis_url).await {
         Ok(c) => c,
         Err(_) => {
-            // If Redis is unavailable, fall back to DB
-            return get_permissions_from_db(auth_user, db).await;
+            // If Redis is unavailable, fall back to DB directly
+            let role_repo = RoleRepository::new(db.database().clone());
+            return match role_repo.get_user_permissions(&auth_user.user_id).await {
+                Ok(user_perms) => user_perms.effective_permissions,
+                Err(_) => {
+                    tracing::warn!(
+                        user_id = %auth_user.user_id,
+                        "Failed to get user permissions from DB"
+                    );
+                    vec![]
+                }
+            };
         }
     };
 
@@ -63,7 +110,11 @@ pub async fn extract_permissions(
                 Ok(Some(_)) => permissions, // Cache valid
                 _ => {
                     // Cache stale or miss - fetch from DB
-                    let perms = get_permissions_from_db(auth_user, db).await;
+                    let role_repo = RoleRepository::new(db.database().clone());
+                    let perms = match role_repo.get_user_permissions(&auth_user.user_id).await {
+                        Ok(user_perms) => user_perms.effective_permissions,
+                        Err(_) => vec![],
+                    };
                     // Update cache
                     if !perms.is_empty() {
                         let _ = cache.set_permissions(
@@ -78,7 +129,11 @@ pub async fn extract_permissions(
         }
         _ => {
             // Cache miss - fetch from DB
-            let perms = get_permissions_from_db(auth_user, db).await;
+            let role_repo = RoleRepository::new(db.database().clone());
+            let perms = match role_repo.get_user_permissions(&auth_user.user_id).await {
+                Ok(user_perms) => user_perms.effective_permissions,
+                Err(_) => vec![],
+            };
             // Update cache
             if !perms.is_empty() {
                 let _ = cache.set_permissions(
@@ -88,25 +143,6 @@ pub async fn extract_permissions(
                 ).await;
             }
             perms
-        }
-    }
-}
-
-/// Fetch permissions from database
-async fn get_permissions_from_db(
-    auth_user: &AuthUserV2,
-    db: &MongoDB,
-) -> Vec<String> {
-    let role_repo = RoleRepository::new(db.database().clone());
-
-    match role_repo.get_user_permissions(&auth_user.user_id).await {
-        Ok(user_perms) => user_perms.effective_permissions,
-        Err(_) => {
-            tracing::warn!(
-                user_id = %auth_user.user_id,
-                "Failed to get user permissions from DB"
-            );
-            vec![]
         }
     }
 }

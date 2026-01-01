@@ -16,6 +16,7 @@
 //! See `.env.example` for required configuration.
 
 use actix_web::{middleware::Logger, web, App, HttpServer};
+use actix_web_grants::GrantsMiddleware;
 use std::sync::Arc;
 use tracing_actix_web::TracingLogger;
 use utoipa::OpenApi;
@@ -97,6 +98,8 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::default())
             .wrap(middleware::RequestId)
             .wrap(cors)
+            // V2 Authorization middleware (must come AFTER AuthMiddleware)
+            .wrap(GrantsMiddleware::with_extractor(middleware::extract_permissions))
             // App data (dependency injection)
             .app_data(web::Data::new(auth_service.clone()))
             .app_data(web::Data::new(wallet_service.clone()))
