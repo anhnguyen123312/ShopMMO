@@ -676,7 +676,7 @@ flowchart TD
     GetRequest --> GetWallets[Lay Seller + Platform wallets]
 
     %% Bank Transfer
-    GetWallets --> CallBankAPI[Goi Bank Transfer API<br/>amount: vnd_amount<br/>bank_account: seller's bank]
+    GetWallets --> CallBankAPI[Goi Bank Transfer API<br/>amount: vnd_amount<br/>bank_account: sellers bank]
     CallBankAPI --> BankResult{Bank transfer result}
     BankResult -->|FAIL| HandleFail[Retry logic<br/>Max 3 retries<br/>Exponential backoff]
     HandleFail --> RetryCheck{Retry success?}
