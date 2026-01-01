@@ -11,7 +11,10 @@
       "Skill(superpowers:systematic-debugging)",
       "Skill(superpowers:systematic-debugging:*)",
       "Bash(pgrep:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(cargo build:*)",
+      "Bash(lsof:*)",
+      "Bash(timeout:*)"
     ]
   }
 }

@@ -10,12 +10,32 @@ use crate::{
     middleware::{AuthUser, AdminUser},
 };
 use super::{dto::*, service::WalletService};
+// Domain types with ToSchema for OpenAPI responses
+use super::domain::{
+    WalletType, WalletStatus, TransactionType, Direction, BalanceType,
+    TransactionStatus, ReferenceType, WithdrawalStatus, Severity, SnapshotStatus,
+    EscrowStatus, ReleaseType, AdminOperation, TargetType, DepositStatus,
+    ValidationResult, CheckResult, ValidationError
+};
 
 // ========================================================================
 // WALLET MANAGEMENT
 // ========================================================================
 
 /// GET /api/wallet/balance - Get wallet balance
+#[utoipa::path(
+    get,
+    path = "/api/wallet/balance",
+    tag = "Wallet",
+    responses(
+        (status = 200, description = "Wallet balance retrieved successfully", body = ApiResponse<WalletBalanceResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn get_balance(
     service: web::Data<Arc<WalletService>>,
     auth: AuthUser,
@@ -25,6 +45,20 @@ pub async fn get_balance(
 }
 
 /// POST /api/wallet/create - Create wallet (auto-created on first login usually)
+#[utoipa::path(
+    post,
+    path = "/api/wallet/create",
+    tag = "Wallet",
+    request_body = CreateWalletRequest,
+    responses(
+        (status = 200, description = "Wallet created successfully", body = ApiResponse<WalletInfoResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn create_wallet(
     service: web::Data<Arc<WalletService>>,
     auth: AuthUser,
@@ -41,6 +75,20 @@ pub async fn create_wallet(
 // ========================================================================
 
 /// POST /api/wallet/deposit/auto - Create auto deposit request
+#[utoipa::path(
+    post,
+    path = "/api/wallet/deposit/auto",
+    tag = "Wallet",
+    request_body = AutoDepositRequest,
+    responses(
+        (status = 200, description = "Deposit request created", body = ApiResponse<DepositResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn create_auto_deposit(
     service: web::Data<Arc<WalletService>>,
     auth: AuthUser,
@@ -53,6 +101,21 @@ pub async fn create_auto_deposit(
 }
 
 /// POST /api/wallet/deposit/manual - Manual deposit (admin only)
+#[utoipa::path(
+    post,
+    path = "/api/wallet/deposit/manual",
+    tag = "Admin",
+    request_body = ManualDepositRequest,
+    responses(
+        (status = 200, description = "Manual deposit completed", body = ApiResponse<DepositResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - Admin only"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn manual_deposit(
     service: web::Data<Arc<WalletService>>,
     admin: AdminUser,
@@ -69,6 +132,20 @@ pub async fn manual_deposit(
 // ========================================================================
 
 /// POST /api/wallet/withdrawal - Create withdrawal request
+#[utoipa::path(
+    post,
+    path = "/api/wallet/withdrawal",
+    tag = "Wallet",
+    request_body = WithdrawalRequest,
+    responses(
+        (status = 200, description = "Withdrawal request created", body = ApiResponse<WithdrawalResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn create_withdrawal(
     service: web::Data<Arc<WalletService>>,
     auth: AuthUser,
@@ -81,6 +158,19 @@ pub async fn create_withdrawal(
 }
 
 /// GET /api/wallet/withdrawal/:request_id/validate - Validate withdrawal
+#[utoipa::path(
+    get,
+    path = "/api/wallet/withdrawal/{request_id}/validate",
+    tag = "Wallet",
+    params(
+        ("request_id" = String, Path, description = "Withdrawal request ID")
+    ),
+    responses(
+        (status = 200, description = "Withdrawal validated", body = ApiResponse<ValidationResult>),
+        (status = 404, description = "Withdrawal not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn validate_withdrawal(
     service: web::Data<Arc<WalletService>>,
     path: web::Path<String>,
@@ -91,6 +181,24 @@ pub async fn validate_withdrawal(
 }
 
 /// POST /api/wallet/withdrawal/:request_id/approve - Approve withdrawal (admin)
+#[utoipa::path(
+    post,
+    path = "/api/wallet/withdrawal/{request_id}/approve",
+    tag = "Admin",
+    params(
+        ("request_id" = String, Path, description = "Withdrawal request ID")
+    ),
+    responses(
+        (status = 200, description = "Withdrawal approved", body = ApiResponse<SuccessResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - Admin only"),
+        (status = 404, description = "Withdrawal not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn approve_withdrawal(
     service: web::Data<Arc<WalletService>>,
     admin: AdminUser,
@@ -102,6 +210,25 @@ pub async fn approve_withdrawal(
 }
 
 /// POST /api/wallet/withdrawal/:request_id/reject - Reject withdrawal (admin)
+#[utoipa::path(
+    post,
+    path = "/api/wallet/withdrawal/{request_id}/reject",
+    tag = "Admin",
+    params(
+        ("request_id" = String, Path, description = "Withdrawal request ID")
+    ),
+    request_body = RejectWithdrawalRequest,
+    responses(
+        (status = 200, description = "Withdrawal rejected", body = ApiResponse<SuccessResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - Admin only"),
+        (status = 404, description = "Withdrawal not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn reject_withdrawal(
     service: web::Data<Arc<WalletService>>,
     admin: AdminUser,
@@ -116,6 +243,25 @@ pub async fn reject_withdrawal(
 }
 
 /// POST /api/wallet/withdrawal/:request_id/complete - Complete bank transfer (admin)
+#[utoipa::path(
+    post,
+    path = "/api/wallet/withdrawal/{request_id}/complete",
+    tag = "Admin",
+    params(
+        ("request_id" = String, Path, description = "Withdrawal request ID")
+    ),
+    request_body = CompleteBankTransferRequest,
+    responses(
+        (status = 200, description = "Bank transfer completed", body = ApiResponse<SuccessResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - Admin only"),
+        (status = 404, description = "Withdrawal not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn complete_bank_transfer(
     service: web::Data<Arc<WalletService>>,
     admin: AdminUser,
@@ -134,6 +280,20 @@ pub async fn complete_bank_transfer(
 // ========================================================================
 
 /// POST /api/wallet/purchase - Create purchase (buyer pays)
+#[utoipa::path(
+    post,
+    path = "/api/wallet/purchase",
+    tag = "Wallet",
+    request_body = PurchaseRequest,
+    responses(
+        (status = 200, description = "Purchase created", body = ApiResponse<PurchaseResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn create_purchase(
     service: web::Data<Arc<WalletService>>,
     auth: AuthUser,
@@ -146,6 +306,23 @@ pub async fn create_purchase(
 }
 
 /// POST /api/wallet/escrow/:escrow_id/early-release - Early release escrow (buyer)
+#[utoipa::path(
+    post,
+    path = "/api/wallet/escrow/{escrow_id}/early-release",
+    tag = "Wallet",
+    params(
+        ("escrow_id" = String, Path, description = "Escrow ID")
+    ),
+    responses(
+        (status = 200, description = "Escrow released early", body = ApiResponse<SuccessResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Escrow not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn early_release_escrow(
     service: web::Data<Arc<WalletService>>,
     auth: AuthUser,
@@ -159,6 +336,24 @@ pub async fn early_release_escrow(
 }
 
 /// POST /api/wallet/escrow/:escrow_id/dispute - Create dispute
+#[utoipa::path(
+    post,
+    path = "/api/wallet/escrow/{escrow_id}/dispute",
+    tag = "Wallet",
+    params(
+        ("escrow_id" = String, Path, description = "Escrow ID")
+    ),
+    request_body = DisputeRequest,
+    responses(
+        (status = 200, description = "Dispute created", body = ApiResponse<SuccessResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Escrow not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn create_dispute(
     service: web::Data<Arc<WalletService>>,
     auth: AuthUser,
@@ -173,6 +368,25 @@ pub async fn create_dispute(
 }
 
 /// POST /api/wallet/escrow/:escrow_id/resolve/refund - Resolve dispute with refund (admin)
+#[utoipa::path(
+    post,
+    path = "/api/wallet/escrow/{escrow_id}/resolve/refund",
+    tag = "Admin",
+    params(
+        ("escrow_id" = String, Path, description = "Escrow ID")
+    ),
+    request_body = ResolveDisputeRequest,
+    responses(
+        (status = 200, description = "Dispute resolved with refund", body = ApiResponse<SuccessResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - Admin only"),
+        (status = 404, description = "Escrow not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn resolve_dispute_refund(
     service: web::Data<Arc<WalletService>>,
     admin: AdminUser,
@@ -187,6 +401,25 @@ pub async fn resolve_dispute_refund(
 }
 
 /// POST /api/wallet/escrow/:escrow_id/resolve/release - Resolve dispute with release (admin)
+#[utoipa::path(
+    post,
+    path = "/api/wallet/escrow/{escrow_id}/resolve/release",
+    tag = "Admin",
+    params(
+        ("escrow_id" = String, Path, description = "Escrow ID")
+    ),
+    request_body = ResolveDisputeRequest,
+    responses(
+        (status = 200, description = "Dispute resolved with release", body = ApiResponse<SuccessResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - Admin only"),
+        (status = 404, description = "Escrow not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn resolve_dispute_release(
     service: web::Data<Arc<WalletService>>,
     admin: AdminUser,
@@ -205,6 +438,21 @@ pub async fn resolve_dispute_release(
 // ========================================================================
 
 /// POST /api/wallet/admin/debit - Manual debit (admin)
+#[utoipa::path(
+    post,
+    path = "/api/wallet/admin/debit",
+    tag = "Admin",
+    request_body = ManualDebitRequest,
+    responses(
+        (status = 200, description = "Manual debit completed", body = ApiResponse<SuccessResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - Admin only"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn manual_debit(
     service: web::Data<Arc<WalletService>>,
     admin: AdminUser,
@@ -215,6 +463,21 @@ pub async fn manual_debit(
 }
 
 /// POST /api/wallet/admin/freeze - Freeze wallet (admin)
+#[utoipa::path(
+    post,
+    path = "/api/wallet/admin/freeze",
+    tag = "Admin",
+    request_body = FreezeWalletRequest,
+    responses(
+        (status = 200, description = "Wallet frozen", body = ApiResponse<SuccessResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - Admin only"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn freeze_wallet(
     service: web::Data<Arc<WalletService>>,
     admin: AdminUser,
@@ -225,6 +488,21 @@ pub async fn freeze_wallet(
 }
 
 /// POST /api/wallet/admin/unfreeze - Unfreeze wallet (admin)
+#[utoipa::path(
+    post,
+    path = "/api/wallet/admin/unfreeze",
+    tag = "Admin",
+    request_body = UnfreezeWalletRequest,
+    responses(
+        (status = 200, description = "Wallet unfrozen", body = ApiResponse<SuccessResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - Admin only"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn unfreeze_wallet(
     service: web::Data<Arc<WalletService>>,
     admin: AdminUser,
@@ -237,6 +515,21 @@ pub async fn unfreeze_wallet(
 }
 
 /// POST /api/wallet/admin/commission - Set shop commission (admin)
+#[utoipa::path(
+    post,
+    path = "/api/wallet/admin/commission",
+    tag = "Admin",
+    request_body = SetShopCommissionRequest,
+    responses(
+        (status = 200, description = "Commission rate set", body = ApiResponse<SuccessResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - Admin only"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn set_shop_commission(
     service: web::Data<Arc<WalletService>>,
     admin: AdminUser,
@@ -249,6 +542,24 @@ pub async fn set_shop_commission(
 }
 
 /// GET /api/wallet/admin/logs - Get admin operation logs (admin)
+#[utoipa::path(
+    get,
+    path = "/api/wallet/admin/logs",
+    tag = "Admin",
+    params(
+        ("target_id" = Option<String>, Query, description = "Filter by target ID"),
+        ("limit" = Option<i64>, Query, description = "Limit number of results")
+    ),
+    responses(
+        (status = 200, description = "Admin logs retrieved", body = ApiResponse<serde_json::Value>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - Admin only"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn get_admin_logs(
     service: web::Data<Arc<WalletService>>,
     _admin: AdminUser,
@@ -265,6 +576,27 @@ pub async fn get_admin_logs(
 // ========================================================================
 
 /// GET /api/wallet/transactions - Get transaction history
+#[utoipa::path(
+    get,
+    path = "/api/wallet/transactions",
+    tag = "Wallet",
+    params(
+        ("page" = Option<i64>, Query, description = "Page number"),
+        ("page_size" = Option<i64>, Query, description = "Page size"),
+        ("tx_type" = Option<String>, Query, description = "Transaction type filter"),
+        ("status" = Option<String>, Query, description = "Status filter"),
+        ("start_date" = Option<String>, Query, description = "Start date (ISO format)"),
+        ("end_date" = Option<String>, Query, description = "End date (ISO format)")
+    ),
+    responses(
+        (status = 200, description = "Transaction history retrieved", body = ApiResponse<TransactionListResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn get_transaction_history(
     service: web::Data<Arc<WalletService>>,
     auth: AuthUser,
@@ -281,6 +613,18 @@ pub async fn get_transaction_history(
 // ========================================================================
 
 /// POST /api/wallet/jobs/auto-release - Process auto-release escrows (internal)
+#[utoipa::path(
+    post,
+    path = "/api/wallet/jobs/auto-release",
+    tag = "Admin",
+    responses(
+        (status = 200, description = "Auto-release processed", body = ApiResponse<ProcessAutoReleaseResponse>),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn process_auto_releases(
     service: web::Data<Arc<WalletService>>,
 ) -> Result<HttpResponse, ApiError> {

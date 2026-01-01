@@ -5,6 +5,7 @@
 
 use bson::{oid::ObjectId, DateTime as BsonDateTime};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 // ============================================================================
 // WALLET MODEL - Unified for all user types
@@ -85,7 +86,7 @@ pub struct Wallet {
 }
 
 /// Wallet type enumeration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum WalletType {
     /// Regular user/buyer wallet
@@ -97,7 +98,7 @@ pub enum WalletType {
 }
 
 /// Wallet status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum WalletStatus {
     /// Normal operation
@@ -191,7 +192,7 @@ pub struct Transaction {
 }
 
 /// Transaction type enumeration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TransactionType {
     // === Deposit ===
@@ -237,7 +238,7 @@ pub enum TransactionType {
 }
 
 /// Transaction direction
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Direction {
     /// Money in (+)
@@ -247,7 +248,7 @@ pub enum Direction {
 }
 
 /// Balance type affected
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum BalanceType {
     Available,
@@ -256,7 +257,7 @@ pub enum BalanceType {
 }
 
 /// Transaction status (Exness-style)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TransactionStatus {
     Pending,
@@ -284,7 +285,7 @@ pub struct StatusChange {
 }
 
 /// Reference type for linking transactions
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ReferenceType {
     Order,
@@ -368,7 +369,7 @@ pub struct WithdrawalRequest {
 }
 
 /// Withdrawal status enumeration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum WithdrawalStatus {
     Pending,
@@ -396,7 +397,7 @@ pub struct WithdrawalStatusChange {
 }
 
 /// Validation result for withdrawal
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ValidationResult {
     pub balance_check: CheckResult,
     pub flow_check: CheckResult,
@@ -407,7 +408,7 @@ pub struct ValidationResult {
 }
 
 /// Individual check result
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CheckResult {
     pub passed: bool,
     pub details: String,
@@ -415,7 +416,7 @@ pub struct CheckResult {
 }
 
 /// Validation error
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ValidationError {
     pub error_type: String,
     pub message: String,
@@ -423,7 +424,7 @@ pub struct ValidationError {
 }
 
 /// Severity level
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Severity {
     Info,
@@ -489,7 +490,7 @@ pub struct MonthlySnapshot {
 }
 
 /// Snapshot status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum SnapshotStatus {
     Pending,
@@ -543,7 +544,7 @@ pub struct EscrowHold {
 }
 
 /// Escrow status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum EscrowStatus {
     Holding,
@@ -554,7 +555,7 @@ pub enum EscrowStatus {
 }
 
 /// Release type for escrow
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ReleaseType {
     Auto,
@@ -612,7 +613,7 @@ pub struct AdminOperationLog {
 }
 
 /// Admin operation type
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum AdminOperation {
     ManualDeposit,
@@ -631,7 +632,7 @@ pub enum AdminOperation {
 }
 
 /// Target type for admin operations
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TargetType {
     Wallet,
@@ -714,7 +715,7 @@ pub struct DepositRequest {
 }
 
 /// Deposit status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum DepositStatus {
     Pending,

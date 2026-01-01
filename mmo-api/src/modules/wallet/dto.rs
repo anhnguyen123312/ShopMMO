@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use validator::Validate;
+use utoipa::ToSchema;
 
 use super::domain::{
     BalanceType, CheckResult, Direction, EscrowStatus, Severity, SnapshotStatus,
@@ -17,7 +18,7 @@ use super::domain::{
 // ============================================================================
 
 /// Get wallet balance response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WalletBalanceResponse {
     pub wallet_id: String,
@@ -44,7 +45,7 @@ pub struct WalletBalanceResponse {
 }
 
 /// Wallet detailed info response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WalletInfoResponse {
     pub wallet_id: String,
@@ -91,7 +92,7 @@ pub struct WalletInfoResponse {
 // ============================================================================
 
 /// Auto deposit request (via payment gateway)
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AutoDepositRequest {
     /// VND amount (must be divisible by 1000)
@@ -105,7 +106,7 @@ pub struct AutoDepositRequest {
 }
 
 /// Manual deposit request (admin only)
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ManualDepositRequest {
     /// Target user ID
@@ -127,7 +128,7 @@ pub struct ManualDepositRequest {
 }
 
 /// Deposit response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DepositResponse {
     pub deposit_id: String,
@@ -151,7 +152,7 @@ pub struct DepositResponse {
 // ============================================================================
 
 /// Withdrawal request
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WithdrawalRequest {
     /// Trust amount to withdraw
@@ -173,7 +174,7 @@ pub struct WithdrawalRequest {
 }
 
 /// Withdrawal response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WithdrawalResponse {
     pub request_id: String,
@@ -196,7 +197,7 @@ pub struct WithdrawalResponse {
 }
 
 /// Bank info in response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BankInfo {
     pub bank_code: String,
@@ -210,7 +211,7 @@ pub struct BankInfo {
 // ============================================================================
 
 /// Purchase request (buyer buys product)
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PurchaseRequest {
     #[validate(length(min = 1))]
@@ -230,7 +231,7 @@ pub struct PurchaseRequest {
 }
 
 /// Purchase response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PurchaseResponse {
     pub order_id: String,
@@ -247,7 +248,7 @@ pub struct PurchaseResponse {
 // ============================================================================
 
 /// Early release request (buyer confirms receipt)
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EarlyReleaseRequest {
     #[validate(length(min = 1))]
@@ -255,7 +256,7 @@ pub struct EarlyReleaseRequest {
 }
 
 /// Escrow info response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EscrowInfoResponse {
     pub escrow_id: String,
@@ -282,7 +283,7 @@ pub struct EscrowInfoResponse {
 // ============================================================================
 
 /// Refund request (buyer requests refund)
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RefundRequest {
     #[validate(length(min = 1))]
@@ -293,7 +294,7 @@ pub struct RefundRequest {
 }
 
 /// Seller cancel order request
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SellerCancelRequest {
     #[validate(length(min = 1))]
@@ -308,7 +309,7 @@ pub struct SellerCancelRequest {
 // ============================================================================
 
 /// Admin manual debit request
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AdminDebitRequest {
     #[validate(length(min = 1))]
@@ -327,7 +328,7 @@ pub struct AdminDebitRequest {
 }
 
 /// Admin wallet freeze request
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AdminFreezeRequest {
     #[validate(length(min = 1))]
@@ -344,7 +345,7 @@ pub struct AdminFreezeRequest {
 }
 
 /// Admin wallet unfreeze request
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AdminUnfreezeRequest {
     #[validate(length(min = 1))]
@@ -355,7 +356,7 @@ pub struct AdminUnfreezeRequest {
 }
 
 /// Admin withdrawal approval/rejection
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AdminWithdrawalDecisionRequest {
     #[validate(length(min = 1))]
@@ -371,7 +372,7 @@ pub struct AdminWithdrawalDecisionRequest {
 }
 
 /// Shop commission config request
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetCommissionRateRequest {
     #[validate(length(min = 1))]
@@ -398,7 +399,7 @@ pub struct SetCommissionRateRequest {
 // ============================================================================
 
 /// Transaction history query
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionHistoryQuery {
     /// Page number (1-indexed)
@@ -423,7 +424,7 @@ pub struct TransactionHistoryQuery {
 }
 
 /// Transaction response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionResponse {
     pub tx_id: String,
@@ -457,7 +458,7 @@ pub struct TransactionResponse {
 }
 
 /// Paginated transaction list
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionListResponse {
     pub transactions: Vec<TransactionResponse>,
@@ -472,7 +473,7 @@ pub struct TransactionListResponse {
 // ============================================================================
 
 /// Monthly snapshot response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SnapshotResponse {
     pub snapshot_id: String,
@@ -490,7 +491,7 @@ pub struct SnapshotResponse {
 }
 
 /// Reconciliation report response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReconciliationReportResponse {
     pub date: String,
@@ -507,7 +508,7 @@ pub struct ReconciliationReportResponse {
 }
 
 /// Individual reconciliation check
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReconciliationCheck {
     pub check_name: String,
@@ -521,7 +522,7 @@ pub struct ReconciliationCheck {
 // ============================================================================
 
 /// Admin dashboard stats
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AdminDashboardStats {
     pub total_trust_in_system: i64,
@@ -535,7 +536,7 @@ pub struct AdminDashboardStats {
 }
 
 /// Pending withdrawal for admin review
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingWithdrawalItem {
     pub request_id: String,
@@ -565,7 +566,7 @@ fn validate_divisible_by_1000(value: i64) -> Result<(), validator::ValidationErr
 // ============================================================================
 
 /// Generic success response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SuccessResponse {
     pub success: bool,
@@ -598,19 +599,19 @@ impl SuccessResponse {
 // ============================================================================
 
 /// Create wallet request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateWalletRequest {
     pub wallet_type: super::domain::WalletType,
 }
 
 /// Dispute request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct DisputeRequest {
     pub reason: String,
 }
 
 /// Resolve dispute request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct ResolveDisputeRequest {
     pub reason: String,
 }
@@ -628,19 +629,19 @@ pub type UnfreezeWalletRequest = AdminUnfreezeRequest;
 pub type SetShopCommissionRequest = SetCommissionRateRequest;
 
 /// Reject withdrawal request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct RejectWithdrawalRequest {
     pub rejection_reason: String,
 }
 
 /// Complete bank transfer request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CompleteBankTransferRequest {
     pub bank_transfer_ref: String,
 }
 
 /// Admin log query
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct AdminLogQuery {
     pub target_id: Option<String>,
     pub limit: Option<i64>,
@@ -662,7 +663,7 @@ pub struct AdminLogResponse {
 }
 
 /// Process auto-release response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ProcessAutoReleaseResponse {
     pub total_processed: i32,
     pub released_count: i32,
