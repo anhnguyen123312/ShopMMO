@@ -73,6 +73,10 @@ reqwest = { version = "0.12", features = ["json"] }
 name = "seed_permissions"
 path = "migrations/src/seed_permissions.rs"
 
+[[bin]]
+name = "create_super_admin"
+path = "scripts/create_super_admin.rs"
+
 [dev-dependencies]
 # Testing
 mockall = "0.13"

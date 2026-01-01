@@ -120,6 +120,36 @@ impl UserRepository {
             .await?;
         Ok(count > 0)
     }
+
+    /// Updates user roles
+    ///
+    /// # Arguments
+    /// * `id` - User's ObjectId
+    /// * `role` - Primary role
+    /// * `roles` - Array of all roles
+    /// * `perm_version` - New permission version
+    pub async fn update_roles(
+        &self,
+        id: &ObjectId,
+        role: String,
+        roles: Vec<String>,
+        perm_version: u32,
+    ) -> Result<(), DbError> {
+        self.collection
+            .update_one(
+                doc! { "_id": id },
+                doc! {
+                    "$set": {
+                        "role": role,
+                        "roles": roles,
+                        "perm_version": perm_version,
+                        "updated_at": DateTime::now()
+                    }
+                },
+            )
+            .await?;
+        Ok(())
+    }
 }
 
 /// Refresh token repository

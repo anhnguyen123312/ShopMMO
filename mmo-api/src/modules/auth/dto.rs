@@ -151,3 +151,42 @@ pub struct LogoutRequest {
     #[validate(length(min = 1, message = "Refresh token is required"))]
     pub refresh_token: String,
 }
+
+/// Assign role request (admin only)
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AssignRoleRequest {
+    /// User ID to assign role to
+    #[validate(length(min = 1, message = "User ID is required"))]
+    pub user_id: String,
+
+    /// Roles to assign (e.g., ["BUYER", "SELLER"])
+    #[validate(length(min = 1, message = "At least one role is required"))]
+    pub roles: Vec<String>,
+}
+
+/// User with roles response
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserRolesResponse {
+    /// User ID
+    pub id: String,
+
+    /// User's email
+    pub email: String,
+
+    /// User's display name
+    pub name: String,
+
+    /// Primary role (backward compatibility)
+    pub role: String,
+
+    /// All assigned roles
+    pub roles: Vec<String>,
+
+    /// Permission version
+    pub perm_version: u32,
+
+    /// Account status
+    pub status: String,
+}

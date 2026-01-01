@@ -26,7 +26,8 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(cargo test:*)",
-      "Bash(cargo:*)"
+      "Bash(cargo:*)",
+      "Bash(MONGODB_URI=\"mongodb://mmo_admin:mmo_secret_password@localhost:27017\" cargo run:*)"
     ]
   }
 }

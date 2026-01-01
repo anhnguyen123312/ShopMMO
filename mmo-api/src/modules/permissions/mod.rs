@@ -6,6 +6,7 @@
 //! - Redis caching for performance
 //! - Ownership-based resource access
 
+pub mod constants;
 pub mod domain;
 pub mod dto;
 pub mod repository;
@@ -14,4 +15,5 @@ pub mod handler;
 pub mod routes;
 pub mod cache;
 
+pub use constants::{Permission, all_permissions, all_permissions_set, is_valid_permission};
 pub use domain::*;

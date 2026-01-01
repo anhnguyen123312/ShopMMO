@@ -49,7 +49,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("========================================");
 
     // Load MongoDB URL from environment or use default
+    // Supports both MONGODB_URL and MONGODB_URI environment variables
     let mongo_url = std::env::var("MONGODB_URL")
+        .or_else(|_| std::env::var("MONGODB_URI"))
         .unwrap_or_else(|_| "mongodb://localhost:27017".to_string());
 
     println!("\nConnecting to MongoDB...");
@@ -63,12 +65,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n1. Seeding permissions...");
     let permissions_collection: Collection<Permission> = db.collection("permissions");
 
+    // Clean up any documents with null _id first
+    let _ = permissions_collection.delete_many(doc! { "_id": null }).await;
+
+    // Delete existing permissions (optional - remove if you want to keep existing)
+    let delete_result = permissions_collection.delete_many(doc! {}).await?;
+    println!("   Deleted {} existing permissions", delete_result.deleted_count);
+
     let now = mongodb::bson::DateTime::now();
 
     let permissions = vec![
         // User Management
         Permission {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "users:read".to_string(),
             display_name: "Read Users".to_string(),
             description: "View user information".to_string(),
@@ -80,7 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             updated_at: now,
         },
         Permission {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "users:update".to_string(),
             display_name: "Update Users".to_string(),
             description: "Update user information".to_string(),
@@ -93,7 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         // Product Management
         Permission {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "products:read".to_string(),
             display_name: "Read Products".to_string(),
             description: "View products".to_string(),
@@ -105,7 +114,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             updated_at: now,
         },
         Permission {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "products:create".to_string(),
             display_name: "Create Products".to_string(),
             description: "Create new products".to_string(),
@@ -117,7 +126,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             updated_at: now,
         },
         Permission {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "products:update".to_string(),
             display_name: "Update Products".to_string(),
             description: "Update product information".to_string(),
@@ -129,7 +138,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             updated_at: now,
         },
         Permission {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "products:delete".to_string(),
             display_name: "Delete Products".to_string(),
             description: "Delete products".to_string(),
@@ -142,7 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         // Order Management
         Permission {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "orders:read".to_string(),
             display_name: "Read Orders".to_string(),
             description: "View orders".to_string(),
@@ -154,7 +163,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             updated_at: now,
         },
         Permission {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "orders:create".to_string(),
             display_name: "Create Orders".to_string(),
             description: "Create new orders".to_string(),
@@ -166,7 +175,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             updated_at: now,
         },
         Permission {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "orders:update".to_string(),
             display_name: "Update Orders".to_string(),
             description: "Update order status".to_string(),
@@ -179,7 +188,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         // Wallet Management
         Permission {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "wallets:read".to_string(),
             display_name: "Read Wallets".to_string(),
             description: "View wallet information".to_string(),
@@ -191,7 +200,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             updated_at: now,
         },
         Permission {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "wallets:manage".to_string(),
             display_name: "Manage Wallets".to_string(),
             description: "Manage wallet operations".to_string(),
@@ -204,7 +213,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         // Admin
         Permission {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "admin:users".to_string(),
             display_name: "Admin Users".to_string(),
             description: "Administrative access to user management".to_string(),
@@ -216,7 +225,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             updated_at: now,
         },
         Permission {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "admin:system".to_string(),
             display_name: "Admin System".to_string(),
             description: "Full system administration".to_string(),
@@ -229,13 +238,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     ];
 
-    // Delete existing permissions (optional - remove if you want to keep existing)
-    let delete_result = permissions_collection.delete_many(doc! {}).await?;
-    println!("   Deleted {} existing permissions", delete_result.deleted_count);
-
-    // Insert permissions
-    let insert_result = permissions_collection.insert_many(permissions).await?;
-    println!("   Inserted {} permissions", insert_result.inserted_ids.len());
+    // Insert permissions one by one to avoid duplicate key issues
+    for permission in permissions {
+        permissions_collection.insert_one(permission).await?;
+    }
+    println!("   Inserted permissions");
 
     // Get permission IDs for roles
     let cursor = permissions_collection.find(doc! {}).await?;
@@ -270,7 +277,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let roles = vec![
         Role {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "BUYER".to_string(),
             display_name: "Buyer".to_string(),
             description: "Regular buyer role".to_string(),
@@ -285,7 +292,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             updated_at: now,
         },
         Role {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "SELLER".to_string(),
             display_name: "Seller".to_string(),
             description: "Seller role".to_string(),
@@ -300,7 +307,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             updated_at: now,
         },
         Role {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "ADMIN".to_string(),
             display_name: "Administrator".to_string(),
             description: "Administrator role".to_string(),
@@ -315,7 +322,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             updated_at: now,
         },
         Role {
-            id: None,
+            id: Some(bson::oid::ObjectId::new()),
             name: "SUPER_ADMIN".to_string(),
             display_name: "Super Administrator".to_string(),
             description: "Super administrator role".to_string(),

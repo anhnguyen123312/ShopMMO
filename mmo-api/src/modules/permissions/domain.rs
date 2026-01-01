@@ -88,6 +88,51 @@ pub struct Role {
     /// Version for optimistic locking and cache invalidation
     /// Increment when permissions change
     pub version: i32,
+
+    /// Creation timestamp
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<DateTime>,
+
+    /// Last update timestamp
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<DateTime>,
+}
+
+impl Role {
+    /// Create a new role
+    pub fn new(
+        name: String,
+        display_name: String,
+        level: i32,
+        permissions: Vec<String>,
+    ) -> Self {
+        let now = DateTime::now();
+        Self {
+            id: None,
+            name,
+            display_name,
+            level,
+            parent_role_id: None,
+            inherits_from: vec![],
+            direct_permissions: vec![],
+            flattened_permissions: permissions,
+            is_system: false,
+            is_active: true,
+            version: 1,
+            created_at: Some(now),
+            updated_at: Some(now),
+        }
+    }
+
+    /// Check if role has a specific permission
+    pub fn has_permission(&self, permission: &str) -> bool {
+        self.flattened_permissions.contains(&permission.to_string())
+    }
+
+    /// Get all permissions for this role
+    pub fn permissions(&self) -> &[String] {
+        &self.flattened_permissions
+    }
 }
 
 /// User role assignment with metadata

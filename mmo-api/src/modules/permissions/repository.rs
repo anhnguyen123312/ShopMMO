@@ -126,4 +126,107 @@ impl RoleRepository {
             perm_version,
         })
     }
+
+    /// Create a new role
+    pub async fn create(&self, role: Role) -> Result<(), DbError> {
+        self.collection
+            .insert_one(role)
+            .await
+            .map_err(|e| crate::core::ApiError::database(format!("Failed to create role: {}", e)))?;
+        Ok(())
+    }
+
+    /// Update role permissions
+    pub async fn update_permissions(
+        &self,
+        role_name: &str,
+        permissions: Vec<String>,
+    ) -> Result<(), DbError> {
+        self.collection
+            .update_one(
+                doc! { "name": role_name },
+                doc! {
+                    "$set": {
+                        "flattened_permissions": permissions,
+                        "updated_at": DateTime::now()
+                    },
+                    "$inc": { "version": 1 }
+                },
+            )
+            .await
+            .map_err(|e| crate::core::ApiError::database(format!("Failed to update role: {}", e)))?;
+        Ok(())
+    }
+
+    /// Delete a role (soft delete)
+    pub async fn delete(&self, role_name: &str) -> Result<(), DbError> {
+        self.collection
+            .update_one(
+                doc! { "name": role_name },
+                doc! { "$set": { "is_active": false, "updated_at": DateTime::now() } },
+            )
+            .await
+            .map_err(|e| crate::core::ApiError::database(format!("Failed to delete role: {}", e)))?;
+        Ok(())
+    }
+
+    /// List all active roles
+    pub async fn list_all(&self) -> Result<Vec<Role>, DbError> {
+        use futures::StreamExt;
+
+        let mut cursor = self.collection
+            .find(doc! { "is_active": true })
+            .await
+            .map_err(|e| crate::core::ApiError::database(format!("Failed to list roles: {}", e)))?;
+
+        let mut results = Vec::new();
+        while let Some(result) = cursor.next().await {
+            match result {
+                Ok(item) => results.push(item),
+                Err(e) => return Err(crate::core::ApiError::database(format!("Failed to fetch role: {}", e))),
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Assign role to user
+    pub async fn assign_role_to_user(
+        &self,
+        user_id: &ObjectId,
+        role: &Role,
+    ) -> Result<(), DbError> {
+        self.users_collection
+            .update_one(
+                doc! { "_id": user_id },
+                doc! {
+                    "$addToSet": { "roles": role.name.clone() },
+                    "$set": { "updated_at": DateTime::now() }
+                },
+            )
+            .await
+            .map_err(|e| crate::core::ApiError::database(format!("Failed to assign role: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Remove role from user
+    pub async fn remove_role_from_user(
+        &self,
+        user_id: &ObjectId,
+        role_name: &str,
+    ) -> Result<(), DbError> {
+        self.users_collection
+            .update_one(
+                doc! { "_id": user_id },
+                doc! {
+                    "$pull": { "roles": role_name },
+                    "$set": { "updated_at": DateTime::now() }
+                },
+            )
+            .await
+            .map_err(|e| crate::core::ApiError::database(format!("Failed to remove role: {}", e)))?;
+
+        Ok(())
+    }
 }

@@ -3,6 +3,7 @@
 //! HTTP request handlers for authentication endpoints.
 
 use actix_web::{web, HttpRequest, HttpResponse};
+use actix_web_grants::protect;
 use std::sync::Arc;
 use validator::Validate;
 
@@ -195,4 +196,94 @@ pub async fn change_password(
     Ok(HttpResponse::Ok().json(ApiResponse::success(MessageResponse::new(
         "Password changed successfully",
     ))))
+}
+
+/// Assign roles to user (admin only)
+///
+/// POST /api/auth/admin/assign-roles
+#[utoipa::path(
+    post,
+    path = "/api/auth/admin/assign-roles",
+    tag = "Auth",
+    security(
+        ("bearer_auth" = [])
+    ),
+    request_body = AssignRoleRequest,
+    responses(
+        (status = 200, description = "Roles assigned successfully", body = ApiResponse<MessageResponse>),
+        (status = 400, description = "Validation error", body = ApiError),
+        (status = 401, description = "Unauthorized", body = ApiError),
+        (status = 403, description = "Forbidden - Admin only", body = ApiError)
+    )
+)]
+#[protect("ADMIN", "SUPER_ADMIN")]
+pub async fn assign_roles(
+    service: web::Data<Arc<AuthService>>,
+    req: web::Json<AssignRoleRequest>,
+) -> Result<HttpResponse, ApiError> {
+    // Validate request
+    req.validate()?;
+
+    let req = req.into_inner();
+
+    // Parse user ID
+    let user_id = bson::oid::ObjectId::parse_str(&req.user_id)
+        .map_err(|_| ApiError::bad_request("Invalid user ID"))?;
+
+    // Call service
+    service.assign_roles(&user_id, req.roles).await?;
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(MessageResponse::new(
+        "Roles assigned successfully",
+    ))))
+}
+
+/// Get user roles (admin only)
+///
+/// GET /api/auth/admin/users/{user_id}/roles
+#[utoipa::path(
+    get,
+    path = "/api/auth/admin/users/{user_id}/roles",
+    tag = "Auth",
+    security(
+        ("bearer_auth" = [])
+    ),
+    params(
+        ("user_id" = String, Path, description = "User ID")
+    ),
+    responses(
+        (status = 200, description = "User roles retrieved", body = ApiResponse<UserRolesResponse>),
+        (status = 401, description = "Unauthorized", body = ApiError),
+        (status = 403, description = "Forbidden - Admin only", body = ApiError),
+        (status = 404, description = "User not found", body = ApiError)
+    )
+)]
+#[protect("ADMIN", "SUPER_ADMIN")]
+pub async fn get_user_roles(
+    service: web::Data<Arc<AuthService>>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, ApiError> {
+    let user_id_str = path.into_inner();
+
+    // Parse user ID
+    let user_id = bson::oid::ObjectId::parse_str(&user_id_str)
+        .map_err(|_| ApiError::bad_request("Invalid user ID"))?;
+
+    // Get user from service
+    let user = service
+        .get_user_with_roles(&user_id)
+        .await
+        .map_err(|e| ApiError::database(e.to_string()))?;
+
+    let response = UserRolesResponse {
+        id: user.id.unwrap().to_hex(),
+        email: user.email,
+        name: user.name,
+        role: user.role.clone(),
+        roles: if user.roles.is_empty() { vec![user.role] } else { user.roles },
+        perm_version: user.perm_version,
+        status: format!("{:?}", user.status),
+    };
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(response)))
 }

@@ -57,8 +57,8 @@ impl AuthService {
         let password_hash = hash_password(&req.password, Some(self.config.security.bcrypt_cost))
             .map_err(|e| ServiceError::InternalError(format!("Failed to hash password: {}", e)))?;
 
-        // Create user
-        let user = User::new(req.email, password_hash, req.name, None);
+        // Create user with default BUYER role
+        let user = User::new(req.email, password_hash, req.name, Some("BUYER".to_string()), None);
         let created_user = self
             .user_repo
             .create(user)
@@ -245,7 +245,7 @@ impl AuthService {
         Ok(())
     }
 
-    /// Generates access and refresh tokens
+    /// Generates access and refresh tokens using V2 JWT with roles array
     async fn generate_tokens(
         &self,
         user: &User,
@@ -258,27 +258,37 @@ impl AuthService {
         let access_expires = utils::jwt::parse_duration(&self.config.jwt.access_token_expires_in);
         let refresh_expires_days = utils::jwt::parse_duration(&self.config.jwt.refresh_token_expires_in) / (60 * 24);
 
-        // TODO: Get actual wallet_id from wallet service
-        // For now, use user_id as wallet_id (wallet will be created on first access)
+        // Get wallet_id from user or generate default
         let wallet_id = format!("WLT-{}", user_id);
 
-        // Generate access token
-        let access_token = utils::generate_access_token(
+        // Get roles array from user (default to roles field, or backward compatible to single role)
+        let roles = if user.roles.is_empty() {
+            vec![user.role.clone()]
+        } else {
+            user.roles.clone()
+        };
+
+        let perm_version = user.perm_version;
+
+        // Generate access token with V2
+        let access_token = utils::generate_access_token_v2(
             &user_id,
             &wallet_id,
             &user.email,
-            &user.role,
+            roles.clone(),
+            perm_version,
             &self.config.jwt.secret,
             access_expires,
         )
         .map_err(|e| ServiceError::InternalError(e.to_string()))?;
 
-        // Generate refresh token
-        let refresh_token = utils::generate_refresh_token(
+        // Generate refresh token with V2
+        let refresh_token = utils::generate_refresh_token_v2(
             &user_id,
             &wallet_id,
             &user.email,
-            &user.role,
+            roles,
+            perm_version,
             &self.config.jwt.secret,
             refresh_expires_days,
         )
@@ -304,5 +314,91 @@ impl AuthService {
             access_expires * 60, // Convert to seconds
             UserResponse::from(user.clone()),
         ))
+    }
+
+    /// Assign roles to a user (admin only)
+    ///
+    /// # Arguments
+    /// * `user_id` - User's ObjectId
+    /// * `roles` - Array of role names to assign
+    ///
+    /// # Returns
+    /// * `Result<(), ServiceError>` - Success or error
+    pub async fn assign_roles(
+        &self,
+        user_id: &ObjectId,
+        roles: Vec<String>,
+    ) -> Result<(), ServiceError> {
+        // Get user
+        let user = self
+            .user_repo
+            .find_by_id(user_id)
+            .await
+            .map_err(|e| ServiceError::DatabaseError(e.to_string()))?
+            .ok_or_else(|| ServiceError::NotFound("User not found".to_string()))?;
+
+        // Validate roles
+        let valid_roles = ["BUYER", "SELLER", "ADMIN", "SUPER_ADMIN"];
+        for role in &roles {
+            if !valid_roles.contains(&role.as_str()) {
+                return Err(ServiceError::ValidationFailed(format!(
+                    "Invalid role: {}. Valid roles are: {}",
+                    role,
+                    valid_roles.join(", ")
+                )));
+            }
+        }
+
+        // Determine primary role (highest level)
+        let role_priority = [("SUPER_ADMIN", 3), ("ADMIN", 2), ("SELLER", 1), ("BUYER", 0)];
+        let primary_role = roles
+            .iter()
+            .max_by_key(|r| role_priority.iter().find(|(name, _)| name == r).map(|(_, p)| p).unwrap_or(&0))
+            .unwrap_or(&String::from("BUYER"))
+            .clone();
+
+        // Increment perm_version to invalidate cache
+        let new_perm_version = user.perm_version + 1;
+
+        // Log before move
+        tracing::info!(
+            user_id = %user_id.to_hex(),
+            roles = ?roles,
+            primary_role = %primary_role,
+            perm_version = new_perm_version,
+            "Updating user roles"
+        );
+
+        // Update user roles
+        self.user_repo
+            .update_roles(user_id, primary_role, roles, new_perm_version)
+            .await
+            .map_err(|e| ServiceError::DatabaseError(e.to_string()))?;
+
+        tracing::info!(
+            user_id = %user_id.to_hex(),
+            perm_version = new_perm_version,
+            "User roles updated successfully"
+        );
+
+        Ok(())
+    }
+
+    /// Get user with roles (admin only)
+    ///
+    /// # Arguments
+    /// * `user_id` - User's ObjectId
+    ///
+    /// # Returns
+    /// * `Result<User, ServiceError>` - User with roles
+    pub async fn get_user_with_roles(
+        &self,
+        user_id: &ObjectId,
+    ) -> Result<super::domain::User, ServiceError> {
+        self.user_repo
+            .find_by_id(user_id)
+            .await
+            .map_err(|e| ServiceError::DatabaseError(e.to_string()))?
+            .ok_or_else(|| ServiceError::NotFound("User not found".to_string()))
     }
 }

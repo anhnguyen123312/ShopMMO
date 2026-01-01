@@ -21,8 +21,16 @@ pub struct User {
     /// User's display name
     pub name: String,
 
-    /// User's role
+    /// User's role (deprecated - kept for backward compatibility)
     pub role: String,
+
+    /// User's roles - array of role names for V2 authorization
+    #[serde(default)]
+    pub roles: Vec<String>,
+
+    /// Permission version - increments when permissions change for cache invalidation
+    #[serde(default)]
+    pub perm_version: u32,
 
     /// Account status
     pub status: UserStatus,
@@ -91,15 +99,20 @@ impl User {
     /// * `email` - User's email
     /// * `password_hash` - Hashed password
     /// * `name` - User's display name
-    /// * `role` - User's role (default: "user")
-    pub fn new(email: String, password_hash: String, name: String, role: Option<String>) -> Self {
+    /// * `role` - User's primary role (default: "BUYER")
+    /// * `roles` - Optional array of additional roles
+    pub fn new(email: String, password_hash: String, name: String, role: Option<String>, roles: Option<Vec<String>>) -> Self {
         let now = DateTime::now();
+        let default_role = role.unwrap_or_else(|| "BUYER".to_string());
+        let default_roles = roles.unwrap_or_else(|| vec![default_role.clone()]);
         Self {
             id: None,
             email,
             password_hash,
             name,
-            role: role.unwrap_or_else(|| "user".to_string()),
+            role: default_role,
+            roles: default_roles,
+            perm_version: 1,
             status: UserStatus::Active,
             email_verified: false,
             last_login_at: None,
