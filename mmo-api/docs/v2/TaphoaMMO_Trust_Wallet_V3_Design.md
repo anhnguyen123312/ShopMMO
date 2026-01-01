@@ -646,7 +646,7 @@ flowchart TD
     
     %% Process Each
     Loop --> GetInfo[Lay info:<br/>- escrow_amount<br/>- seller_id<br/>- order_id]
-    GetInfo --> GetCommissionRate[Lay commission rate<br/>shop_commission_config<br/>hoac default 5%]
+    GetInfo --> GetCommissionRate[Lay commission rate<br/>shop_commission_config<br/>hoac default 5pct]
     GetCommissionRate --> CalcCommission[commission = amount x rate<br/>seller_receives = amount - commission]
     
     %% Validate Platform
@@ -900,12 +900,12 @@ flowchart TD
     ListShops --> SelectShop[Admin chon Shop]
     
     %% Show Form
-    SelectShop --> ShowForm[Form:<br/>- Current rate: 5%<br/>- New rate: ____%<br/>- Effective from: ____<br/>- Effective to: ____ (optional)<br/>- Reason]
+    SelectShop --> ShowForm[Form:<br/>- Current rate: 5pct<br/>- New rate: ____<br/>- Effective from: ____<br/>- Effective to: ____ (optional)<br/>- Reason]
     
     %% Validation
     ShowForm --> Validate<Validate>
-    Validate -->|FAIL| Error[ Loi:<br/>- Rate: 1% - 20%<br/>- Effective from >= today]
-    Validate -->|PASS| ShowImpact[Hien thi Impact:<br/>Shop co 100 orders/thang<br/>Thay doi commission tu 5% - 3%<br/>Giam thu: ~200,000 Trust/thang]
+    Validate -->|FAIL| Error[ Loi:<br/>- Rate: 1pct - 20pct<br/>- Effective from >= today]
+    Validate -->|PASS| ShowImpact[Hien thi Impact:<br/>Shop co 100 orders/thang<br/>Thay doi commission tu 5pct - 3pct<br/>Giam thu: ~200,000 Trust/thang]
     
     ShowImpact --> Confirm{Admin xac nhan?}
     Confirm -->|No| Cancel([Huy])

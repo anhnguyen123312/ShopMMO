@@ -171,7 +171,7 @@ graph TB
     end
 
     subgraph Money OUT from Platform
-        Release[Release to Seller<br/>Platform - Seller<br/>minus 5% commission]
+        Release[Release to Seller<br/>Platform - Seller<br/>minus 5pct commission]
         RefundBuyer[Refund to Buyer<br/>Platform - Buyer]
     end
 
@@ -481,7 +481,7 @@ flowchart TD
     %% Processing Each Escrow
     Loop --> GetEscrow[Lay escrow record]
     GetEscrow --> GetOrder[Lay Order info<br/>order_id, seller_id, amount]
-    GetOrder --> CalcCommission[Tinh Commission<br/>commission = amount x 5%<br/>seller_receives = amount x 95%]
+    GetOrder --> CalcCommission[Tinh Commission<br/>commission = amount x 5pct<br/>seller_receives = amount x 95pct]
 
     %% Validation
     CalcCommission --> GetWallets[Lay Platform + Seller wallets]
@@ -546,13 +546,13 @@ flowchart TD
 
     %% Trigger Release
     UpdateEscrowTime --> TriggerRelease[Trigger release process<br/>Chay logic giong Auto-release]
-    TriggerRelease --> CalcCommission[Tinh commission 5%]
+    TriggerRelease --> CalcCommission[Tinh commission 5pct]
     CalcCommission --> BeginTx[ BEGIN Transaction]
 
     %% Same as auto-release
     BeginTx --> DeductPlatform[Platform: -amount]
-    DeductPlatform --> CreditSeller[Seller: +95%]
-    CreditSeller --> AccrueCommission[Commission debt: +5%]
+    DeductPlatform --> CreditSeller[Seller: +95pct]
+    CreditSeller --> AccrueCommission[Commission debt: +5pct]
     AccrueCommission --> CommitTx[ COMMIT]
 
     CommitTx --> NotifyBuyer[Notify Buyer:<br/>Cam ơn ban da xac nhan]
@@ -624,7 +624,7 @@ flowchart TD
     %% Validation Phase
     UserInput --> Validate<Validate>
     Validate -->|FAIL| Error1[ Errors:<br/>- Min 10 Trust<br/>- Max 100,000 Trust/lần<br/>- available >= amount<br/>- Bank info dầy du]
-    Validate -->|PASS| CalcActual[Tinh so tien thuc nhan:<br/>commission_to_deduct = min(amountx5%, commission_debt)<br/>actual_trust = amount - commission_to_deduct<br/>vnd_amount = actual_trust x 1000]
+    Validate -->|PASS| CalcActual[Tinh so tien thuc nhan:<br/>commission_to_deduct = min(amountx5pct, commission_debt)<br/>actual_trust = amount - commission_to_deduct<br/>vnd_amount = actual_trust x 1000]
 
     CalcActual --> ShowConfirm[Hien thi xac nhan:<br/>Rut: <amount> Trust<br/>Commission tru: <commission_to_deduct> Trust<br/>Nhan ve: <vnd_amount> VND]
     ShowConfirm --> UserConfirm{Seller xac nhan?}
@@ -814,7 +814,7 @@ flowchart TD
     Start([Escrow dưoc release])
 
     Start --> GetAmount[escrow_amount = 100 Trust]
-    GetAmount --> CalcCommission[commission = 100 x 5% = 5 Trust<br/>seller_receives = 100 - 5 = 95 Trust]
+    GetAmount --> CalcCommission[commission = 100 x 5pct = 5 Trust<br/>seller_receives = 100 - 5 = 95 Trust]
 
     CalcCommission --> BeginTx[ BEGIN Transaction]
     BeginTx --> DeductPlatform[Platform: -100 Trust]
@@ -839,7 +839,7 @@ flowchart TD
 flowchart TD
     Start([Seller withdraw 100 Trust<br/>Commission debt = 20 Trust])
 
-    Start --> CalcDeduct[Tinh commission cần tru:<br/>commission_to_deduct = min(100 x 5%, 20)<br/>= min(5, 20) = 5 Trust]
+    Start --> CalcDeduct[Tinh commission cần tru:<br/>commission_to_deduct = min(100 x 5pct, 20)<br/>= min(5, 20) = 5 Trust]
     CalcDeduct --> CalcActual[actual_trust = 100 - 5 = 95 Trust<br/>vnd_amount = 95 x 1000 = 95,000 VND]
 
     CalcActual --> BankTransfer[Chuyen khoan 95,000 VND cho seller]
