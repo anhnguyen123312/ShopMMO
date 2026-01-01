@@ -10,6 +10,7 @@ description = "Production-ready Rust API server with actix-web and MongoDB"
 actix-web = "4.9"
 actix-rt = "2.10"
 actix-cors = "0.7"
+actix-web-grants = "4"
 
 # OpenAPI / Swagger
 utoipa = { version = "5.4.0 ", features = ["actix_extras", "macros"] }
