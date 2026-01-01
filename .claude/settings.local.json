@@ -33,7 +33,9 @@
       "Bash(*)",
       "Bash(TOKEN='eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI2OTU2YTkxZDM2ZmM1YzZhZDYxZmU1ZDciLCJ3YWxsZXRfaWQiOiJXTFQtNjk1NmE5MWQzNmZjNWM2YWQ2MWZlNWQ3IiwiZW1haWwiOiJ0ZXN0dXNlckBtbW8uY29tIiwicm9sZSI6IkJVWVSIiwicm9sZXMiOlsiQlVZRUiJdLCJwZXJtX3ZlcnNpb24iOjEsImlhdCI6MTc2NzI4NzEzMCwiZXhwIjoxNzY3Mjg4MDMwLCJ0b2tlbl90eXBlIjoiYWNjZXNzIn0.U2c54RaN_uKcp8wP579RpJa-5EtAqB83pzISZ3aozAk')",
       "Bash(python3:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Skill(superpowers:writing-skills)",
+      "Skill(superpowers:writing-skills:*)"
     ]
   }
 }

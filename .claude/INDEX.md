@@ -23,7 +23,8 @@
 ├── skills/            # How-to guides
 │   ├── create-module.md
 │   ├── brainstorm.md
-│   └── research.md
+│   ├── research.md
+│   └── write-docs.md
 │
 ├── templates/         # Reusable templates
 │   └── v2-feature-design.md
@@ -77,6 +78,7 @@
 1. Which module? → Read context/{module}.md
 2. New feature? → Check V1 doc first
 3. Brainstorm? → Use skills/brainstorm.md
+4. Write docs? → Use skills/write-docs.md
 ```
 
 ### After Completing Task
