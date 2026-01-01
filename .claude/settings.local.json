@@ -7,7 +7,11 @@
       "Bash(cargo check:*)",
       "Bash(cargo clean:*)",
       "Bash(rustup update:*)",
-      "Bash(rustc:*)"
+      "Bash(rustc:*)",
+      "Skill(superpowers:systematic-debugging)",
+      "Skill(superpowers:systematic-debugging:*)",
+      "Bash(pgrep:*)",
+      "Bash(curl:*)"
     ]
   }
 }

@@ -2,7 +2,26 @@
 //!
 //! Generates OpenAPI documentation for the MMO API
 
-use utoipa::OpenApi;
+use utoipa::{OpenApi, openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme}};
+
+/// Security addon for adding JWT bearer authentication scheme
+struct SecurityAddon;
+
+impl utoipa::Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "bearer_auth",
+                SecurityScheme::Http(
+                    HttpBuilder::new()
+                        .scheme(HttpAuthScheme::Bearer)
+                        .bearer_format("JWT")
+                        .build(),
+                ),
+            )
+        }
+    }
+}
 
 /// OpenAPI documentation
 #[derive(OpenApi)]
@@ -47,15 +66,17 @@ use utoipa::OpenApi;
             crate::modules::auth::dto::ChangePasswordRequest,
             crate::modules::auth::dto::AuthResponse,
             crate::modules::auth::dto::UserResponse,
+
+            // Core schemas
+            crate::core::errors::ApiError,
+            crate::core::errors::ErrorResponse,
+            crate::core::response::MessageResponse,
+            // We don't need to register ApiResponse explicitly if we use aliases,
+            // but it's good practice to register the generic ones if possible,
+            // though utoipa requires concrete types in list.
+            // The aliases in ApiResponse struct handle the concrete types used in handlers.
         ),
-        securitySchemes(
-            ("bearer_auth" = (
-                ty = "http",
-                scheme = "bearer",
-                bearer_format = "JWT",
-                description = "JWT access token"
-            ))
-        )
-    )
+    ),
+    modifiers(&SecurityAddon)
 )]
 pub struct ApiDoc;

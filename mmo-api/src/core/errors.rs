@@ -10,6 +10,7 @@ use actix_web::{error::ResponseError, http::StatusCode, HttpResponse};
 use serde::Serialize;
 use std::fmt;
 use thiserror::Error;
+use utoipa::ToSchema;
 
 use super::response::ApiResponse;
 
@@ -17,7 +18,7 @@ use super::response::ApiResponse;
 ///
 /// All errors in the application should be convertible to this type.
 /// This ensures consistent error handling across all layers.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, ToSchema)]
 pub enum ApiError {
     /// Resource not found (404)
     #[error("Resource not found: {message}")]
@@ -148,7 +149,7 @@ impl ResponseError for ApiError {
 }
 
 /// Error response structure for detailed error information
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ErrorResponse {
     pub error: String,
     pub status_code: u16,

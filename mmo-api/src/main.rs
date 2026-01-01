@@ -18,6 +18,7 @@
 use actix_web::{middleware::Logger, web, App, HttpServer};
 use std::sync::Arc;
 use tracing_actix_web::TracingLogger;
+use utoipa::OpenApi;
 
 mod config;
 mod core;
@@ -25,6 +26,7 @@ mod database;
 mod middleware;
 mod modules;
 mod utils;
+mod openapi;
 
 use config::AppConfig;
 use database::{MongoDB, RedisDB};
@@ -112,6 +114,11 @@ async fn main() -> std::io::Result<()> {
                             .wrap(middleware::AuthMiddleware::new(config.clone()))
                             .configure(modules::wallet::routes::configure),
                     ),
+            )
+            // Swagger UI
+            .service(
+                utoipa_swagger_ui::SwaggerUi::new("/swagger-ui/{_:.*}")
+                    .url("/api-docs/openapi.json", openapi::ApiDoc::openapi()),
             )
     })
     .bind(&bind_address)?

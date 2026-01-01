@@ -4,6 +4,7 @@
 //! All responses follow a unified structure for better client-side handling.
 
 use serde::Serialize;
+use utoipa::ToSchema;
 
 /// Standard API response wrapper
 ///
@@ -18,7 +19,7 @@ use serde::Serialize;
 /// // Error response
 /// let response = ApiResponse::<()>::error("User not found");
 /// ```
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiResponse<T> {
     /// Indicates if the request was successful
@@ -34,6 +35,7 @@ pub struct ApiResponse<T> {
 
     /// Error details (only present on error)
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Object)]
     pub error: Option<serde_json::Value>,
 }
 
@@ -118,7 +120,7 @@ impl<T> ApiResponse<T> {
 /// let users = vec![user1, user2, user3];
 /// let response = PaginatedResponse::new(users, 1, 20, 100);
 /// ```
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PaginatedResponse<T> {
     /// Array of items
@@ -129,7 +131,7 @@ pub struct PaginatedResponse<T> {
 }
 
 /// Pagination metadata
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PaginationMeta {
     /// Current page number (1-indexed)
@@ -185,7 +187,7 @@ impl<T> PaginatedResponse<T> {
 /// Success message response (no data)
 ///
 /// Used for operations that don't return data (e.g., DELETE)
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct MessageResponse {
     pub message: String,
 }
