@@ -42,15 +42,15 @@
 
 ```mermaid
 graph TB
-    subgraph "User Wallets (Buyer)"
+    subgraph User Wallets (Buyer)
         UW[User Wallet<br/>Mua hang, Nap/Rut cơ ban]
     end
     
-    subgraph "Seller Wallets"
+    subgraph Seller Wallets
         SW[Seller Wallet<br/>Ban hang, Nhan escrow, Commission]
     end
     
-    subgraph "System Wallets"
+    subgraph System Wallets
         PW[Platform Wallet<br/>Escrow Pool + Commission]
         AW[Admin Operations<br/>Manual adjustments]
     end
@@ -462,7 +462,7 @@ enum TargetType {
 
 ```mermaid
 flowchart TD
-    Start([User nhan "Nap tien"])
+    Start([User nhan Nap tien])
     
     %% Input Phase
     Start --> ShowForm[Hien thi form<br/>So tien VND cần nap]
@@ -503,7 +503,7 @@ flowchart TD
     ValidateInvariant -->|FAIL| Rollback[ ROLLBACK<br/>Alert admin]
     ValidateInvariant -->|PASS| Commit[ COMMIT]
     
-    Commit --> Notify[Notify user<br/>"Nap thanh công 100 Trust"]
+    Commit --> Notify[Notify user<br/>Nap thanh công 100 Trust]
     Notify --> End([Done])
     
     %% Failure Paths
@@ -522,7 +522,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([User nhan "Rut tien"])
+    Start([User nhan Rut tien])
     
     %% Show Info
     Start --> ShowBalance[Hien thi:<br/>Available: 500 Trust<br/>Co the rut: 500,000 VND]
@@ -541,7 +541,7 @@ flowchart TD
     
     %% Background Validation
     CommitTx1 --> EnqueueJob[Enqueue: validate_withdrawal]
-    EnqueueJob --> Response[Response: "Dang xu ly"]
+    EnqueueJob --> Response[Response: Dang xu ly]
     
     %% Async Validation
     EnqueueJob -.->|Async| StartValidation([Background Job])
@@ -553,11 +553,11 @@ flowchart TD
     %% Validation Failed
     ValidationResult -->|FAILED| HandleFailed[Update Request<br/>Status: VALIDATION_FAILED]
     HandleFailed --> UnlockFunds1[Unlock funds<br/>withdrawal_locked - available]
-    UnlockFunds1 --> NotifyFailed[Notify user<br/>"Tu choi: {reason}"]
+    UnlockFunds1 --> NotifyFailed[Notify user<br/>Tu choi: {reason}]
     
     %% Validation Needs Review
     ValidationResult -->|REVIEW| HandleReview[Update Request<br/>Status: AWAITING_APPROVAL]
-    HandleReview --> NotifyAdmin[Notify admin<br/>"Cần review withdrawal"]
+    HandleReview --> NotifyAdmin[Notify admin<br/>Cần review withdrawal]
     
     %% Validation Passed - Auto Approve
     ValidationResult -->|PASSED| HandleApproved[Update Request<br/>Status: APPROVED]
@@ -576,7 +576,7 @@ flowchart TD
     BeginTx2 --> CompleteTx[Transaction<br/>Type: WITHDRAWAL_COMPLETED<br/>withdrawal_locked -= 100<br/>total -= 100]
     CompleteTx --> UpdateWallet2[Update Wallet<br/>lifetime_withdrawn += 100]
     UpdateWallet2 --> CommitTx2[ COMMIT]
-    CommitTx2 --> NotifySuccess[Notify user<br/>"Rut thanh công"]
+    CommitTx2 --> NotifySuccess[Notify user<br/>Rut thanh công]
     
     style Start fill:#339af0,stroke:#1971c2
     style BeginTx1 fill:#339af0,stroke:#1971c2
@@ -591,7 +591,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([User nhan "Mua hang"])
+    Start([User nhan Mua hang])
     
     %% Validation
     Start --> CheckStock{Con hang?}
@@ -617,8 +617,8 @@ flowchart TD
     ValidateInvariant -->|FAIL| Rollback[ ROLLBACK]
     ValidateInvariant -->|PASS| Commit[ COMMIT]
     
-    Commit --> NotifyBuyer[Notify Buyer<br/>"Mua thanh công"]
-    NotifyBuyer --> NotifySeller[Notify Seller<br/>"Co dơn moi"]
+    Commit --> NotifyBuyer[Notify Buyer<br/>Mua thanh công]
+    NotifyBuyer --> NotifySeller[Notify Seller<br/>Co dơn moi]
     NotifySeller --> End([Done])
     
     style Start fill:#51cf66,stroke:#2f9e44
@@ -676,7 +676,7 @@ flowchart TD
     ValidateInvariant -->|FAIL| Rollback[ ROLLBACK]
     ValidateInvariant -->|PASS| Commit[ COMMIT]
     
-    Commit --> NotifySeller[Notify Seller<br/>"Nhan {seller_receives} Trust"]
+    Commit --> NotifySeller[Notify Seller<br/>Nhan {seller_receives} Trust]
     NotifySeller --> HasMore{Con escrow?}
     HasMore -->|Yes| Loop
     HasMore -->|No| End([Done])
@@ -692,7 +692,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([Seller nhan "Rut tien"])
+    Start([Seller nhan Rut tien])
     
     %% Show Info
     Start --> ShowBalance[Hien thi:<br/>Available: 1000 Trust<br/>Commission debt: 50 Trust<br/>Ưoc tinh nhan: 950,000 VND]
@@ -741,7 +741,7 @@ flowchart TD
     ValidateInvariant -->|FAIL| Rollback[ ROLLBACK]
     ValidateInvariant -->|PASS| CommitTx2[ COMMIT]
     
-    CommitTx2 --> NotifySeller[Notify Seller<br/>"Rut thanh công"]
+    CommitTx2 --> NotifySeller[Notify Seller<br/>Rut thanh công]
     NotifySeller --> End([Done])
     
     style Start fill:#339af0,stroke:#1971c2
@@ -798,7 +798,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([Admin chon "Nap tien thu công"])
+    Start([Admin chon Nap tien thu công])
     
     %% Selection
     Start --> SelectUser[Chon User/Seller]
@@ -828,7 +828,7 @@ flowchart TD
     ValidateInvariant -->|PASS| Commit[ COMMIT]
     
     %% Notifications
-    Commit --> NotifyUser[Email User<br/>"Admin da nap X Trust"]
+    Commit --> NotifyUser[Email User<br/>Admin da nap X Trust]
     NotifyUser --> NotifySupervisor[Notify Supervisor<br/>neu amount > threshold]
     NotifySupervisor --> End([Done])
     
@@ -843,7 +843,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([Admin chon "Tru tien"])
+    Start([Admin chon Tru tien])
     
     %% Selection
     Start --> SelectUser[Chon User/Seller]
@@ -881,7 +881,7 @@ flowchart TD
     ValidateInvariant -->|FAIL| Rollback[ ROLLBACK]
     ValidateInvariant -->|PASS| Commit[ COMMIT]
     
-    Commit --> NotifyUser[Notify User<br/>"Tai khoan bi tru X Trust"]
+    Commit --> NotifyUser[Notify User<br/>Tai khoan bi tru X Trust]
     NotifyUser --> End([Done])
     
     style Start fill:#ffd43b,stroke:#f08c00
@@ -893,7 +893,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([Admin chon "Cai dat Commission"])
+    Start([Admin chon Cai dat Commission])
     
     %% List Shops
     Start --> ListShops[Hien thi danh sach Shop<br/>voi commission rate hien tai]
@@ -905,7 +905,7 @@ flowchart TD
     %% Validation
     ShowForm --> Validate{Validate}
     Validate -->|FAIL| Error[ Loi:<br/>- Rate: 1% - 20%<br/>- Effective from >= today]
-    Validate -->|PASS| ShowImpact[Hien thi Impact:<br/>"Shop co 100 orders/thang<br/>Thay doi commission tu 5% - 3%<br/>Giam thu: ~200,000 Trust/thang"]
+    Validate -->|PASS| ShowImpact[Hien thi Impact:<br/>Shop co 100 orders/thang<br/>Thay doi commission tu 5% - 3%<br/>Giam thu: ~200,000 Trust/thang]
     
     ShowImpact --> Confirm{Admin xac nhan?}
     Confirm -->|No| Cancel([Huy])
@@ -922,7 +922,7 @@ flowchart TD
     CreateAuditLog --> Commit[ COMMIT]
     
     %% Notify
-    Commit --> NotifyShop[Notify Shop Owner<br/>"Commission rate thay doi"]
+    Commit --> NotifyShop[Notify Shop Owner<br/>Commission rate thay doi]
     NotifyShop --> End([Done])
     
     style Start fill:#ffd43b,stroke:#f08c00
@@ -954,20 +954,20 @@ flowchart TD
     ApproveConfirm -->|Yes| UpdateApprove[Update Request<br/>Status: APPROVED<br/>approved_by: admin_id<br/>approved_at: now]
     UpdateApprove --> CreateApproveLog[Tao AdminOperationLog<br/>operation: WITHDRAWAL_APPROVE]
     CreateApproveLog --> EnqueueProcess[Enqueue: process_withdrawal]
-    EnqueueProcess --> NotifyUser1[Notify User<br/>"Yêu cầu rut tien da dưoc duyet"]
+    EnqueueProcess --> NotifyUser1[Notify User<br/>Yêu cầu rut tien da dưoc duyet]
     
     %% Reject
     Decision -->|Reject| RejectForm[Form nhap ly do tu choi]
     RejectForm --> UpdateReject[Update Request<br/>Status: REJECTED<br/>reject_reason: reason]
     UpdateReject --> UnlockFunds[Unlock funds<br/>withdrawal_locked - available]
     UnlockFunds --> CreateRejectLog[Tao AdminOperationLog<br/>operation: WITHDRAWAL_REJECT]
-    CreateRejectLog --> NotifyUser2[Notify User<br/>"Yêu cầu bi tu choi: reason"]
+    CreateRejectLog --> NotifyUser2[Notify User<br/>Yêu cầu bi tu choi: reason]
     
     %% Hold for Investigation
     Decision -->|Hold| HoldForm[Form nhap ly do hold]
     HoldForm --> UpdateHold[Update Request<br/>Status: HOLD]
     UpdateHold --> CreateHoldLog[Tao AdminOperationLog]
-    CreateHoldLog --> NotifyUser3[Notify User<br/>"Yêu cầu dang dưoc dieu tra"]
+    CreateHoldLog --> NotifyUser3[Notify User<br/>Yêu cầu dang dưoc dieu tra]
     
     NotifyUser1 --> End([Done])
     NotifyUser2 --> End
@@ -1137,7 +1137,7 @@ flowchart TD
     Compare -->|No| Fail[ FAIL<br/>Flow không khop<br/>Co the co giao dich an/hack]
     
     Pass --> Return1[Return CheckResult: passed]
-    Fail --> Return2[Return CheckResult: failed<br/>reason: "Dong tien không khop"]
+    Fail --> Return2[Return CheckResult: failed<br/>reason: Dong tien không khop]
     
     style Start fill:#339af0,stroke:#1971c2
     style Pass fill:#51cf66,stroke:#2f9e44
@@ -1282,7 +1282,7 @@ flowchart TD
     
     UpdateRequest --> CreateTx[Tao Transaction<br/>Type: WITHDRAWAL_REJECTED<br/>Reverse lock transaction]
     
-    CreateTx --> NotifyUser[Notify User<br/>"Yêu cầu rut tien bi tu choi<br/>Ly do: {reason}"]
+    CreateTx --> NotifyUser[Notify User<br/>Yêu cầu rut tien bi tu choi<br/>Ly do: {reason}]
     
     NotifyUser --> End([Done])
     
@@ -1308,8 +1308,8 @@ flowchart TD
     Note --> CreateTicket[Tao Investigation Ticket<br/>type: WITHDRAWAL_HOLD<br/>priority: based on amount<br/>assigned_to: security_team]
     
     %% Notify
-    CreateTicket --> NotifyUser[Notify User<br/>"Yêu cầu dang dưoc xem xet<br/>Vui long cho 1-3 ngay lam viec"]
-    NotifyUser --> NotifyAdmin[Notify Security Team<br/>"New hold case: {request_id}"]
+    CreateTicket --> NotifyUser[Notify User<br/>Yêu cầu dang dưoc xem xet<br/>Vui long cho 1-3 ngay lam viec]
+    NotifyUser --> NotifyAdmin[Notify Security Team<br/>New hold case: {request_id}]
     
     %% Investigation Options
     NotifyAdmin --> InvestigationEnd([Investigation...])

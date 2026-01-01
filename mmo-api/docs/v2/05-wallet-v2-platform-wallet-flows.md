@@ -45,12 +45,12 @@ Buyer Wallet ──→ Platform Wallet ──→ Seller Wallet
 
 ```mermaid
 graph TB
-    subgraph "User Wallets"
+    subgraph User Wallets
         BW[Buyer Wallets]
         SW[Seller/Vendor Wallets]
     end
 
-    subgraph "System Wallets"
+    subgraph System Wallets
         PW[Platform Wallet<br/>user_id: PLATFORM<br/>Holds: Escrow + Commission]
     end
 
@@ -160,17 +160,17 @@ Platform Wallet {
 graph TB
     Start([Tat ca giao dich bat dầu/ket thuc tai Platform Wallet])
 
-    subgraph "Money IN to Platform"
+    subgraph Money IN to Platform
         Purchase[Buyer mua hang<br/>Buyer - Platform]
         Refund[Seller refund<br/>Seller - Platform<br/>RARE]
     end
 
-    subgraph "Platform Wallet"
+    subgraph Platform Wallet
         PW[Platform Wallet<br/>Escrow Pool]
         Hold[Hold 3 days]
     end
 
-    subgraph "Money OUT from Platform"
+    subgraph Money OUT from Platform
         Release[Release to Seller<br/>Platform - Seller<br/>minus 5% commission]
         RefundBuyer[Refund to Buyer<br/>Platform - Buyer]
     end
@@ -511,7 +511,7 @@ flowchart TD
 
     %% Post-processing
     CommitTx --> InvalidateCache[Xoa cache Platform + Seller]
-    InvalidateCache --> NotifySeller[Notify Seller:<br/>"Ban nhan X Trust tu dơn hang #Y<br/>Commission: Z Trust"]
+    InvalidateCache --> NotifySeller[Notify Seller:<br/>Ban nhan X Trust tu dơn hang #Y<br/>Commission: Z Trust]
     NotifySeller --> HasMore{Con escrow khac?}
     HasMore -->|Yes| Loop
     HasMore -->|No| End2([Done])
@@ -530,14 +530,14 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([Buyer nhan "Da nhan hang"])
+    Start([Buyer nhan Da nhan hang])
 
     %% Validation
     Start --> GetOrder[Lay Order info]
     GetOrder --> CheckBuyer{order.buyer_id == current_user?}
-    CheckBuyer -->|No| Error1[ "Không phai dơn hang cua ban"]
+    CheckBuyer -->|No| Error1[ Không phai dơn hang cua ban]
     CheckBuyer -->|Yes| CheckStatus{order.escrow_status == HOLDING?}
-    CheckStatus -->|No| Error2[ "Dơn hang không trong trang thai escrow"]
+    CheckStatus -->|No| Error2[ Dơn hang không trong trang thai escrow]
     CheckStatus -->|Yes| GetEscrow[Lay EscrowHold]
 
     GetEscrow --> Confirm{Buyer xac nhan}
@@ -555,8 +555,8 @@ flowchart TD
     CreditSeller --> AccrueCommission[Commission debt: +5%]
     AccrueCommission --> CommitTx[ COMMIT]
 
-    CommitTx --> NotifyBuyer[Notify Buyer:<br/>"Cam ơn ban da xac nhan"]
-    NotifyBuyer --> NotifySeller[Notify Seller:<br/>"Buyer da xac nhan som<br/>Ban nhan X Trust"]
+    CommitTx --> NotifyBuyer[Notify Buyer:<br/>Cam ơn ban da xac nhan]
+    NotifyBuyer --> NotifySeller[Notify Seller:<br/>Buyer da xac nhan som<br/>Ban nhan X Trust]
     NotifySeller --> End([Done])
 
     style Start fill:#51cf66,stroke:#2f9e44
@@ -614,7 +614,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([Seller nhan "Rut tien"])
+    Start([Seller nhan Rut tien])
 
     %% Input Phase
     Start --> ShowForm[Hien thi form withdrawal]
@@ -626,7 +626,7 @@ flowchart TD
     Validate -->|FAIL| Error1[ Errors:<br/>- Min 10 Trust<br/>- Max 100,000 Trust/lần<br/>- available >= amount<br/>- Bank info dầy du]
     Validate -->|PASS| CalcActual[Tinh so tien thuc nhan:<br/>commission_to_deduct = min(amount×5%, commission_debt)<br/>actual_trust = amount - commission_to_deduct<br/>vnd_amount = actual_trust × 1000]
 
-    CalcActual --> ShowConfirm[Hien thi xac nhan:<br/>"Rut: {amount} Trust<br/>Commission tru: {commission_to_deduct} Trust<br/>Nhan ve: {vnd_amount} VND"]
+    CalcActual --> ShowConfirm[Hien thi xac nhan:<br/>Rut: {amount} Trust<br/>Commission tru: {commission_to_deduct} Trust<br/>Nhan ve: {vnd_amount} VND]
     ShowConfirm --> UserConfirm{Seller xac nhan?}
     UserConfirm -->|Cancel| CancelOp[Huy thao tac]
     UserConfirm -->|Confirm| BeginTx[ BEGIN Transaction]
@@ -639,7 +639,7 @@ flowchart TD
 
     %% Enqueue Background Job
     CommitTx --> EnqueueJob[Enqueue background job<br/>validate_withdrawal<br/>request_id: <id>]
-    EnqueueJob --> ResponseUser[Response to user:<br/>"Yêu cầu rut tien dang xu ly<br/>Chung tôi se thông bao ket qua"]
+    EnqueueJob --> ResponseUser[Response to user:<br/>Yêu cầu rut tien dang xu ly<br/>Chung tôi se thông bao ket qua]
     ResponseUser --> End1([User sees PENDING status])
 
     %% Background Validation Job (Async)
@@ -651,9 +651,9 @@ flowchart TD
     BG_Check -->|PASS - Manual review| BG_ManualReview[Update: PENDING_REVIEW<br/>Notify admin<br/>Keep funds locked]
     BG_Check -->|PASS - Auto approve| BG_Approve[Update request: APPROVED<br/>Enqueue transfer job]
 
-    BG_Reject --> BG_NotifyReject[Notify seller:<br/>"Yêu cầu bi tu choi: {reason}"]
-    BG_ManualReview --> BG_NotifyReview[Notify seller:<br/>"Dang cho xet duyet"]
-    BG_Approve --> BG_NotifyApprove[Notify seller:<br/>"Da duyet, dang chuyen khoan"]
+    BG_Reject --> BG_NotifyReject[Notify seller:<br/>Yêu cầu bi tu choi: {reason}]
+    BG_ManualReview --> BG_NotifyReview[Notify seller:<br/>Dang cho xet duyet]
+    BG_Approve --> BG_NotifyApprove[Notify seller:<br/>Da duyet, dang chuyen khoan]
 
     style Start fill:#339af0,stroke:#1971c2
     style End1 fill:#ffd43b,stroke:#f08c00
@@ -699,7 +699,7 @@ flowchart TD
 
     %% Notification
     CommitTx --> InvalidateCache[Xoa cache Seller + Platform]
-    InvalidateCache --> NotifySeller[Notify Seller:<br/>"Rut {trust_amount} Trust thanh công<br/>Commission: {commission_deduct} Trust<br/>Da chuyen {vnd_amount} VND<br/>Ref: {bank_ref}"]
+    InvalidateCache --> NotifySeller[Notify Seller:<br/>Rut {trust_amount} Trust thanh công<br/>Commission: {commission_deduct} Trust<br/>Da chuyen {vnd_amount} VND<br/>Ref: {bank_ref}]
     NotifySeller --> End([Done])
 
     style Start fill:#339af0,stroke:#1971c2
@@ -927,7 +927,7 @@ flowchart TD
     Start --> SelectSeller[Admin chon seller cần dieu chinh]
     SelectSeller --> ShowForm[Form nhap:<br/>- Adjustment amount (+/-)<br/>- Reason]
 
-    ShowForm --> AdminInput[Admin nhap:<br/>amount: -10 Trust<br/>reason: "Hoan commission do loi he thong"]
+    ShowForm --> AdminInput[Admin nhap:<br/>amount: -10 Trust<br/>reason: Hoan commission do loi he thong]
     AdminInput --> Validate{Validate}
     Validate -->|FAIL| Error[ Reason bat buoc]
     Validate -->|PASS| CheckPerm{Has COMMISSION_ADJUST perm?}
@@ -942,7 +942,7 @@ flowchart TD
     UpdateDebt --> CreateAudit[AuditLog<br/>action: COMMISSION_ADJUST<br/>admin, seller, amount, reason]
     CreateAudit --> CommitTx[ COMMIT]
 
-    CommitTx --> NotifySeller[Notify Seller<br/>"Commission debt dieu chinh: {amount}"]
+    CommitTx --> NotifySeller[Notify Seller<br/>Commission debt dieu chinh: {amount}]
     NotifySeller --> End([Done])
 
     style Start fill:#339af0,stroke:#1971c2
@@ -971,27 +971,27 @@ Platform Wallet (đang giữ escrow) → Buyer Wallet
 
 ```mermaid
 flowchart TD
-    Start([Buyer nhan "Yêu cầu hoan tien"])
+    Start([Buyer nhan Yêu cầu hoan tien])
 
     %% Validation
     Start --> GetOrder[Lay Order info]
     GetOrder --> CheckBuyer{order.buyer_id == current_user?}
-    CheckBuyer -->|No| Error1[ "Không phai dơn hang cua ban"]
+    CheckBuyer -->|No| Error1[ Không phai dơn hang cua ban]
     CheckBuyer -->|Yes| CheckEscrow{escrow_status == HOLDING?}
-    CheckEscrow -->|No| Error2[ "Dơn hang không trong giai doan escrow"]
+    CheckEscrow -->|No| Error2[ Dơn hang không trong giai doan escrow]
     CheckEscrow -->|Yes| GetEscrow[Lay EscrowHold]
 
     %% Check Timeline
     GetEscrow --> CheckTime{within 3 days?}
-    CheckTime -->|No| Error3[ "Da qua thoi han yêu cầu hoan tien"]
+    CheckTime -->|No| Error3[ Da qua thoi han yêu cầu hoan tien]
     CheckTime -->|Yes| ShowForm[Form nhap ly do hoan tien]
 
     ShowForm --> BuyerInput[Buyer nhap reason]
     BuyerInput --> CreateDispute[Tao DisputeCase<br/>type: REFUND_REQUEST<br/>status: PENDING<br/>requested_by: buyer]
     CreateDispute --> LockEscrow[Update EscrowHold<br/>status: DISPUTED<br/>locked_at: NOW]
 
-    LockEscrow --> NotifySeller[Notify Seller:<br/>"Buyer yêu cầu hoan tien<br/>Ly do: {reason}"]
-    NotifySeller --> NotifyAdmin[Notify Admin:<br/>"Co tranh chap moi cần xu ly"]
+    LockEscrow --> NotifySeller[Notify Seller:<br/>Buyer yêu cầu hoan tien<br/>Ly do: {reason}]
+    NotifySeller --> NotifyAdmin[Notify Admin:<br/>Co tranh chap moi cần xu ly]
     NotifyAdmin --> End1([Cho Admin xu ly])
 
     %% Admin Processing
@@ -1014,14 +1014,14 @@ flowchart TD
     UpdateOrder1 --> UpdateDispute1[Update DisputeCase<br/>status: RESOLVED<br/>resolution: REFUND_APPROVED]
     UpdateDispute1 --> CommitTx1[ COMMIT]
 
-    CommitTx1 --> NotifyBuyerSuccess[Notify Buyer:<br/>"Hoan tien thanh công"]
-    NotifyBuyerSuccess --> NotifySellerRefund[Notify Seller:<br/>"Dơn hang da hoan tien"]
+    CommitTx1 --> NotifyBuyerSuccess[Notify Buyer:<br/>Hoan tien thanh công]
+    NotifyBuyerSuccess --> NotifySellerRefund[Notify Seller:<br/>Dơn hang da hoan tien]
     NotifySellerRefund --> End2([Done - Refunded])
 
     %% Reject Refund Path
     RejectRefund --> UpdateDispute2[Update DisputeCase<br/>status: RESOLVED<br/>resolution: REFUND_REJECTED]
     UpdateDispute2 --> UnlockEscrow[Update EscrowHold<br/>status: HOLDING<br/>Continue normal release]
-    UnlockEscrow --> NotifyBuyerReject[Notify Buyer:<br/>"Yêu cầu hoan tien bi tu choi"]
+    UnlockEscrow --> NotifyBuyerReject[Notify Buyer:<br/>Yêu cầu hoan tien bi tu choi]
     NotifyBuyerReject --> End3([Done - Continue Escrow])
 
     style Start fill:#339af0,stroke:#1971c2
@@ -1042,9 +1042,9 @@ flowchart TD
 
     Start --> GetOrder[Lay Order]
     GetOrder --> CheckSeller{order.seller_id == current_user?}
-    CheckSeller -->|No| Error1[ "Không phai dơn cua ban"]
+    CheckSeller -->|No| Error1[ Không phai dơn cua ban]
     CheckSeller -->|Yes| CheckStatus{escrow_status == HOLDING?}
-    CheckStatus -->|No| Error2[ "Dơn không trong escrow"]
+    CheckStatus -->|No| Error2[ Dơn không trong escrow]
     CheckStatus -->|Yes| ShowForm[Form nhap ly do cancel]
 
     ShowForm --> SellerInput[Seller nhap reason]
@@ -1064,8 +1064,8 @@ flowchart TD
     UpdateOrder --> CreateAudit[AuditLog<br/>action: SELLER_CANCEL_ORDER<br/>reason: <reason>]
     CreateAudit --> CommitTx[ COMMIT]
 
-    CommitTx --> NotifyBuyer[Notify Buyer:<br/>"Seller da huy dơn<br/>Tien da hoan vao vi"]
-    NotifyBuyer --> NotifyAdmin[Notify Admin:<br/>"Seller cancel: {order_id}"]
+    CommitTx --> NotifyBuyer[Notify Buyer:<br/>Seller da huy dơn<br/>Tien da hoan vao vi]
+    NotifyBuyer --> NotifyAdmin[Notify Admin:<br/>Seller cancel: {order_id}]
     NotifyAdmin --> End([Done])
 
     style Start fill:#339af0,stroke:#1971c2
@@ -1141,7 +1141,7 @@ flowchart TD
     UpdateWallet --> CreateAudit[AuditLog<br/>action: ADMIN_DEDUCT<br/>admin, user, amount, reason]
     CreateAudit --> CommitTx[ COMMIT]
 
-    CommitTx --> NotifyUser[Notify User:<br/>"Admin da tru {amount} Trust<br/>Ly do: {reason}"]
+    CommitTx --> NotifyUser[Notify User:<br/>Admin da tru {amount} Trust<br/>Ly do: {reason}]
     NotifyUser --> End([Done])
 
     style Start fill:#339af0,stroke:#1971c2
@@ -1181,7 +1181,7 @@ flowchart TD
     UpdateWalletStatus -->|Yes| SuspendWallet[Update Wallet<br/>status: SUSPENDED]
     UpdateWalletStatus -->|No| KeepActive[Keep status: ACTIVE]
 
-    SuspendWallet --> NotifyUser[Notify User:<br/>"Vi cua ban da bi khoa<br/>Ly do: {reason}<br/>Ma case: {case_ref}<br/>Liên he support"]
+    SuspendWallet --> NotifyUser[Notify User:<br/>Vi cua ban da bi khoa<br/>Ly do: {reason}<br/>Ma case: {case_ref}<br/>Liên he support]
     KeepActive --> NotifyUser
     NotifyUser --> End([Done])
 
@@ -1201,7 +1201,7 @@ flowchart TD
     Start --> SelectUser[Admin chon user]
     SelectUser --> GetLocks[Lay danh sach DisputeLocks<br/>status: ACTIVE]
     GetLocks --> CheckLocks{Co locks active?}
-    CheckLocks -->|No| NoLocks[ "Vi nay không co lock nao"]
+    CheckLocks -->|No| NoLocks[ Vi nay không co lock nao]
     CheckLocks -->|Yes| ShowLocks[Hien thi list locks:<br/>- Amount<br/>- Reason<br/>- Case ref<br/>- Locked date]
 
     ShowLocks --> SelectLock[Admin chon lock cần unlock]
@@ -1227,7 +1227,7 @@ flowchart TD
     CheckAllUnlocked -->|Yes| ReactivateWallet[Update Wallet<br/>status: ACTIVE]
     CheckAllUnlocked -->|No| KeepSuspended[Keep status: SUSPENDED]
 
-    ReactivateWallet --> NotifyUser[Notify User:<br/>"Vi da dưoc mo khoa<br/>Ban co the giao dich trinh thưong"]
+    ReactivateWallet --> NotifyUser[Notify User:<br/>Vi da dưoc mo khoa<br/>Ban co the giao dich trinh thưong]
     KeepSuspended --> NotifyUser
     NotifyUser --> End([Done])
 
@@ -1342,8 +1342,8 @@ flowchart TD
     CreateSnapshot --> CheckSeverity{discrepancy > 100?}
     CreateSnapshot2 --> HasMore{Con wallet khac?}
 
-    CheckSeverity -->|Yes| AlertCritical[ CRITICAL ALERT to Admin<br/>"Wallet {id} co chênh lech {amount} Trust"]
-    CheckSeverity -->|No| AlertWarning[ WARNING to Admin<br/>"Minor discrepancy: {amount}"]
+    CheckSeverity -->|Yes| AlertCritical[ CRITICAL ALERT to Admin<br/>Wallet {id} co chênh lech {amount} Trust]
+    CheckSeverity -->|No| AlertWarning[ WARNING to Admin<br/>Minor discrepancy: {amount}]
 
     AlertCritical --> RequireManualReview[Status: REQUIRE_MANUAL_REVIEW<br/>Block wallet operations]
     AlertWarning --> HasMore
