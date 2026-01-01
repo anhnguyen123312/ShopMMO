@@ -18,19 +18,31 @@ use crate::{config::AppConfig, core::ApiError, utils::jwt};
 /// Authenticated user information extracted from JWT
 ///
 /// Available in handlers via the `AuthUser` extractor.
+///
+/// # V2 Updates
+/// - Added `roles` array for multiple role support
+/// - Added `perm_version` for cache invalidation
+/// - Kept `role` for backward compatibility (primary role)
 #[derive(Debug, Clone)]
 pub struct AuthUser {
     /// User's MongoDB ObjectId
     pub user_id: String,
 
-    /// User's wallet ID
+    /// User's wallet ID (from JWT)
     pub wallet_id: String,
 
-    /// User's email
+    /// User's email (from JWT)
     pub email: String,
 
-    /// User's role
+    /// Primary/single role (deprecated - use roles)
+    /// Kept for backward compatibility
     pub role: String,
+
+    /// All roles assigned to the user (V2)
+    pub roles: Vec<String>,
+
+    /// Permission version for cache invalidation (V2)
+    pub perm_version: u32,
 }
 
 /// Admin user extractor (requires ADMIN or SUPER_ADMIN role)
@@ -45,8 +57,14 @@ pub struct AdminUser {
     /// Admin's email
     pub email: String,
 
-    /// Admin's role
+    /// Admin's primary role
     pub role: String,
+
+    /// All admin roles
+    pub roles: Vec<String>,
+
+    /// Permission version
+    pub perm_version: u32,
 }
 
 /// Authentication middleware factory
@@ -137,11 +155,20 @@ where
             }
 
             // Create AuthUser and add to request extensions
+            // Support both V1 (single role) and V2 (roles array) tokens
+            let roles = if claims.roles.is_empty() {
+                vec![claims.role.clone()]
+            } else {
+                claims.roles.clone()
+            };
+
             let auth_user = AuthUser {
                 user_id: claims.sub.clone(),
                 wallet_id: claims.wallet_id.clone(),
                 email: claims.email.clone(),
                 role: claims.role.clone(),
+                roles,
+                perm_version: claims.perm_version,
             };
 
             req.extensions_mut().insert(auth_user);
@@ -189,13 +216,20 @@ impl actix_web::FromRequest for AdminUser {
     ) -> Self::Future {
         match req.extensions().get::<AuthUser>() {
             Some(user) => {
-                // Check if user has admin role
-                if user.role == "ADMIN" || user.role == "SUPER_ADMIN" {
+                // Check if user has admin role (check both primary role and roles array)
+                let is_admin = user.role == "ADMIN"
+                    || user.role == "SUPER_ADMIN"
+                    || user.roles.contains(&"ADMIN".to_string())
+                    || user.roles.contains(&"SUPER_ADMIN".to_string());
+
+                if is_admin {
                     ready(Ok(AdminUser {
                         user_id: user.user_id.clone(),
                         wallet_id: user.wallet_id.clone(),
                         email: user.email.clone(),
                         role: user.role.clone(),
+                        roles: user.roles.clone(),
+                        perm_version: user.perm_version,
                     }))
                 } else {
                     ready(Err(ErrorUnauthorized(
