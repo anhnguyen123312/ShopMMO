@@ -3,6 +3,7 @@
 //! Actix-web handlers for all wallet endpoints
 
 use actix_web::{web, HttpResponse};
+use actix_web_grants::protect;
 use std::sync::Arc;
 
 use crate::{
@@ -30,12 +31,14 @@ use super::domain::{
     responses(
         (status = 200, description = "Wallet balance retrieved successfully", body = ApiResponse<WalletBalanceResponse>),
         (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - insufficient permissions"),
         (status = 500, description = "Internal server error")
     ),
     security(
         ("bearer_auth" = [])
     )
 )]
+#[protect("BUYER", "SELLER")]
 pub async fn get_balance(
     service: web::Data<Arc<WalletService>>,
     auth: AuthUser,
@@ -53,12 +56,14 @@ pub async fn get_balance(
     responses(
         (status = 200, description = "Wallet created successfully", body = ApiResponse<WalletInfoResponse>),
         (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - insufficient permissions"),
         (status = 500, description = "Internal server error")
     ),
     security(
         ("bearer_auth" = [])
     )
 )]
+#[protect("BUYER", "SELLER")]
 pub async fn create_wallet(
     service: web::Data<Arc<WalletService>>,
     auth: AuthUser,
@@ -478,6 +483,7 @@ pub async fn manual_debit(
         ("bearer_auth" = [])
     )
 )]
+#[protect("ADMIN", "SUPER_ADMIN")]
 pub async fn freeze_wallet(
     service: web::Data<Arc<WalletService>>,
     admin: AdminUser,
@@ -503,6 +509,7 @@ pub async fn freeze_wallet(
         ("bearer_auth" = [])
     )
 )]
+#[protect("ADMIN", "SUPER_ADMIN")]
 pub async fn unfreeze_wallet(
     service: web::Data<Arc<WalletService>>,
     admin: AdminUser,
@@ -530,6 +537,7 @@ pub async fn unfreeze_wallet(
         ("bearer_auth" = [])
     )
 )]
+#[protect("ADMIN", "SUPER_ADMIN")]
 pub async fn set_shop_commission(
     service: web::Data<Arc<WalletService>>,
     admin: AdminUser,
