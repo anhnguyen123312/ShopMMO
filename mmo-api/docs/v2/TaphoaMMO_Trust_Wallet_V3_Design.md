@@ -43,11 +43,11 @@
 ```mermaid
 graph TB
     subgraph "User Wallets (Buyer)"
-        UW[User Wallet<br/>Mua hàng, Nạp/Rút cơ bản]
+        UW[User Wallet<br/>Mua hang, Nap/Rut cơ ban]
     end
     
     subgraph "Seller Wallets"
-        SW[Seller Wallet<br/>Bán hàng, Nhận escrow, Commission]
+        SW[Seller Wallet<br/>Ban hang, Nhan escrow, Commission]
     end
     
     subgraph "System Wallets"
@@ -462,48 +462,48 @@ enum TargetType {
 
 ```mermaid
 flowchart TD
-    Start([User nhấn "Nạp tiền"])
+    Start([User nhan "Nap tien"])
     
     %% Input Phase
-    Start --> ShowForm[Hiển thị form<br/>Số tiền VND cần nạp]
-    ShowForm --> UserInput[User nhập số tiền<br/>VD: 100,000 VND]
+    Start --> ShowForm[Hien thi form<br/>So tien VND cần nap]
+    ShowForm --> UserInput[User nhap so tien<br/>VD: 100,000 VND]
     
     %% Validation
     UserInput --> Validate{Validate}
-    Validate -->|FAIL| Error[❌ Lỗi:<br/>- Min 10,000 VND<br/>- Max 50,000,000 VND<br/>- Chia hết cho 1,000]
-    Validate -->|PASS| CalcTrust[Tính Trust<br/>100,000 ÷ 1,000 = 100 Trust]
+    Validate -->|FAIL| Error[ Loi:<br/>- Min 10,000 VND<br/>- Max 50,000,000 VND<br/>- Chia het cho 1,000]
+    Validate -->|PASS| CalcTrust[Tinh Trust<br/>100,000 ÷ 1,000 = 100 Trust]
     
     %% Create Pending Transaction
-    CalcTrust --> CreateTx[Tạo Transaction #1<br/>Type: DEPOSIT_PENDING<br/>Status: PENDING<br/>amount: 100 Trust<br/>vnd: 100,000]
+    CalcTrust --> CreateTx[Tao Transaction #1<br/>Type: DEPOSIT_PENDING<br/>Status: PENDING<br/>amount: 100 Trust<br/>vnd: 100,000]
     
     %% Call 3rd Party
-    CreateTx --> Call3rdParty[Gọi 3rd Party API<br/>VNPay/MoMo/etc]
-    Call3rdParty --> GetPaymentURL[Nhận payment_url<br/>expires: 15 phút]
-    GetPaymentURL --> Redirect[Redirect user<br/>đến payment gateway]
+    CreateTx --> Call3rdParty[Goi 3rd Party API<br/>VNPay/MoMo/etc]
+    Call3rdParty --> GetPaymentURL[Nhan payment_url<br/>expires: 15 phut]
+    GetPaymentURL --> Redirect[Redirect user<br/>den payment gateway]
     
     %% User Pays
-    Redirect --> UserPays[User thanh toán<br/>trên gateway]
-    UserPays --> GatewayResult{Kết quả?}
+    Redirect --> UserPays[User thanh toan<br/>trên gateway]
+    UserPays --> GatewayResult{Ket qua?}
     
     %% Success Path
-    GatewayResult -->|SUCCESS| Webhook[Gateway gửi webhook]
+    GatewayResult -->|SUCCESS| Webhook[Gateway gui webhook]
     Webhook --> ValidateWebhook{Validate webhook<br/>signature?}
-    ValidateWebhook -->|INVALID| RejectWebhook[❌ Reject<br/>Log suspicious]
-    ValidateWebhook -->|VALID| ProcessWebhook[Xử lý webhook]
+    ValidateWebhook -->|INVALID| RejectWebhook[ Reject<br/>Log suspicious]
+    ValidateWebhook -->|VALID| ProcessWebhook[Xu ly webhook]
     
     %% Process Success
-    ProcessWebhook --> BeginTx[🔵 BEGIN DB Transaction]
+    ProcessWebhook --> BeginTx[ BEGIN DB Transaction]
     BeginTx --> UpdateTx1[Update Transaction #1<br/>Status: COMPLETED<br/>external_ref: gateway_ref]
     
-    UpdateTx1 --> CreateTx2[Tạo Transaction #2<br/>Type: DEPOSIT_TRUST_CREDITED<br/>Status: COMPLETED<br/>direction: CREDIT<br/>balance_before: old<br/>balance_after: old + 100]
+    UpdateTx1 --> CreateTx2[Tao Transaction #2<br/>Type: DEPOSIT_TRUST_CREDITED<br/>Status: COMPLETED<br/>direction: CREDIT<br/>balance_before: old<br/>balance_after: old + 100]
     
     CreateTx2 --> UpdateWallet[Update Wallet<br/>available_trust += 100<br/>total_trust += 100<br/>lifetime_deposited += 100]
     
     UpdateWallet --> ValidateInvariant{Validate Invariant?}
-    ValidateInvariant -->|FAIL| Rollback[🔴 ROLLBACK<br/>Alert admin]
-    ValidateInvariant -->|PASS| Commit[🟢 COMMIT]
+    ValidateInvariant -->|FAIL| Rollback[ ROLLBACK<br/>Alert admin]
+    ValidateInvariant -->|PASS| Commit[ COMMIT]
     
-    Commit --> Notify[Notify user<br/>"Nạp thành công 100 Trust"]
+    Commit --> Notify[Notify user<br/>"Nap thanh công 100 Trust"]
     Notify --> End([Done])
     
     %% Failure Paths
@@ -522,38 +522,38 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([User nhấn "Rút tiền"])
+    Start([User nhan "Rut tien"])
     
     %% Show Info
-    Start --> ShowBalance[Hiển thị:<br/>Available: 500 Trust<br/>Có thể rút: 500,000 VND]
-    ShowBalance --> UserInput[User nhập:<br/>- Số Trust: 100<br/>- Bank info]
+    Start --> ShowBalance[Hien thi:<br/>Available: 500 Trust<br/>Co the rut: 500,000 VND]
+    ShowBalance --> UserInput[User nhap:<br/>- So Trust: 100<br/>- Bank info]
     
     %% Validation
-    UserInput --> Validate{Validate cơ bản}
-    Validate -->|FAIL| Error[❌ Lỗi]
-    Validate -->|PASS| CreateRequest[Tạo WithdrawalRequest<br/>Status: PENDING]
+    UserInput --> Validate{Validate cơ ban}
+    Validate -->|FAIL| Error[ Loi]
+    Validate -->|PASS| CreateRequest[Tao WithdrawalRequest<br/>Status: PENDING]
     
     %% Lock Funds
-    CreateRequest --> BeginTx1[🔵 BEGIN Transaction]
-    BeginTx1 --> LockTx[Tạo Transaction<br/>Type: WITHDRAWAL_REQUEST<br/>Move: available → withdrawal_locked]
+    CreateRequest --> BeginTx1[ BEGIN Transaction]
+    BeginTx1 --> LockTx[Tao Transaction<br/>Type: WITHDRAWAL_REQUEST<br/>Move: available - withdrawal_locked]
     LockTx --> UpdateWallet1[Update Wallet<br/>available -= 100<br/>withdrawal_locked += 100]
-    UpdateWallet1 --> CommitTx1[🟢 COMMIT]
+    UpdateWallet1 --> CommitTx1[ COMMIT]
     
     %% Background Validation
     CommitTx1 --> EnqueueJob[Enqueue: validate_withdrawal]
-    EnqueueJob --> Response[Response: "Đang xử lý"]
+    EnqueueJob --> Response[Response: "Dang xu ly"]
     
     %% Async Validation
     EnqueueJob -.->|Async| StartValidation([Background Job])
     StartValidation --> UpdateStatus1[Update Request<br/>Status: VALIDATING]
-    UpdateStatus1 --> RunValidation[Chạy Validation Engine<br/>xem Section 6]
+    UpdateStatus1 --> RunValidation[Chay Validation Engine<br/>xem Section 6]
     
-    RunValidation --> ValidationResult{Kết quả?}
+    RunValidation --> ValidationResult{Ket qua?}
     
     %% Validation Failed
     ValidationResult -->|FAILED| HandleFailed[Update Request<br/>Status: VALIDATION_FAILED]
-    HandleFailed --> UnlockFunds1[Unlock funds<br/>withdrawal_locked → available]
-    UnlockFunds1 --> NotifyFailed[Notify user<br/>"Từ chối: {reason}"]
+    HandleFailed --> UnlockFunds1[Unlock funds<br/>withdrawal_locked - available]
+    UnlockFunds1 --> NotifyFailed[Notify user<br/>"Tu choi: {reason}"]
     
     %% Validation Needs Review
     ValidationResult -->|REVIEW| HandleReview[Update Request<br/>Status: AWAITING_APPROVAL]
@@ -561,22 +561,22 @@ flowchart TD
     
     %% Validation Passed - Auto Approve
     ValidationResult -->|PASSED| HandleApproved[Update Request<br/>Status: APPROVED]
-    HandleApproved --> ProcessWithdrawal[Xử lý rút tiền<br/>Bank transfer]
+    HandleApproved --> ProcessWithdrawal[Xu ly rut tien<br/>Bank transfer]
     
     %% Bank Transfer
     ProcessWithdrawal --> UpdateStatus2[Status: PROCESSING]
-    UpdateStatus2 --> CallBank[Gọi Bank API<br/>Transfer VND]
+    UpdateStatus2 --> CallBank[Goi Bank API<br/>Transfer VND]
     CallBank --> BankResult{Bank result?}
     
     BankResult -->|FAIL| RetryLogic[Retry 3 lần]
     RetryLogic -->|Still fail| HandleBankFail[Status: FAILED<br/>Unlock funds<br/>Notify user]
     
     BankResult -->|SUCCESS| CompleteWithdrawal[Status: COMPLETED]
-    CompleteWithdrawal --> BeginTx2[🔵 BEGIN Transaction]
+    CompleteWithdrawal --> BeginTx2[ BEGIN Transaction]
     BeginTx2 --> CompleteTx[Transaction<br/>Type: WITHDRAWAL_COMPLETED<br/>withdrawal_locked -= 100<br/>total -= 100]
     CompleteTx --> UpdateWallet2[Update Wallet<br/>lifetime_withdrawn += 100]
-    UpdateWallet2 --> CommitTx2[🟢 COMMIT]
-    CommitTx2 --> NotifySuccess[Notify user<br/>"Rút thành công"]
+    UpdateWallet2 --> CommitTx2[ COMMIT]
+    CommitTx2 --> NotifySuccess[Notify user<br/>"Rut thanh công"]
     
     style Start fill:#339af0,stroke:#1971c2
     style BeginTx1 fill:#339af0,stroke:#1971c2
@@ -591,14 +591,14 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([User nhấn "Mua hàng"])
+    Start([User nhan "Mua hang"])
     
     %% Validation
-    Start --> CheckStock{Còn hàng?}
-    CheckStock -->|No| ErrorStock[❌ Hết hàng]
-    CheckStock -->|Yes| CheckBalance{Đủ tiền?<br/>available >= price}
-    CheckBalance -->|No| ErrorBalance[❌ Không đủ tiền]
-    CheckBalance -->|Yes| BeginTx[🔵 BEGIN Transaction]
+    Start --> CheckStock{Con hang?}
+    CheckStock -->|No| ErrorStock[ Het hang]
+    CheckStock -->|Yes| CheckBalance{Du tien?<br/>available >= price}
+    CheckBalance -->|No| ErrorBalance[ Không du tien]
+    CheckBalance -->|Yes| BeginTx[ BEGIN Transaction]
     
     %% Deduct Buyer
     BeginTx --> DeductTx[Transaction Buyer<br/>Type: PURCHASE_DEBIT<br/>direction: DEBIT<br/>amount: -price]
@@ -609,16 +609,16 @@ flowchart TD
     CreditPlatform --> UpdatePlatformWallet[Update Platform Wallet<br/>available += price]
     
     %% Create Escrow
-    UpdatePlatformWallet --> CreateEscrow[Tạo EscrowHold<br/>release_at: now + 3 days]
-    CreateEscrow --> CreateOrder[Tạo/Update Order<br/>payment_status: PAID]
+    UpdatePlatformWallet --> CreateEscrow[Tao EscrowHold<br/>release_at: now + 3 days]
+    CreateEscrow --> CreateOrder[Tao/Update Order<br/>payment_status: PAID]
     
     %% Validate
     CreateOrder --> ValidateInvariant{Validate Invariant?}
-    ValidateInvariant -->|FAIL| Rollback[🔴 ROLLBACK]
-    ValidateInvariant -->|PASS| Commit[🟢 COMMIT]
+    ValidateInvariant -->|FAIL| Rollback[ ROLLBACK]
+    ValidateInvariant -->|PASS| Commit[ COMMIT]
     
-    Commit --> NotifyBuyer[Notify Buyer<br/>"Mua thành công"]
-    NotifyBuyer --> NotifySeller[Notify Seller<br/>"Có đơn mới"]
+    Commit --> NotifyBuyer[Notify Buyer<br/>"Mua thanh công"]
+    NotifyBuyer --> NotifySeller[Notify Seller<br/>"Co dơn moi"]
     NotifySeller --> End([Done])
     
     style Start fill:#51cf66,stroke:#2f9e44
@@ -640,19 +640,19 @@ flowchart TD
     
     %% Query
     Start --> Query[Query EscrowHolds<br/>WHERE status = HOLDING<br/>AND release_at <= NOW]
-    Query --> HasEscrow{Có escrow?}
+    Query --> HasEscrow{Co escrow?}
     HasEscrow -->|No| EndNoAction([No action])
-    HasEscrow -->|Yes| Loop[Lặp từng escrow]
+    HasEscrow -->|Yes| Loop[Lap tung escrow]
     
     %% Process Each
-    Loop --> GetInfo[Lấy info:<br/>- escrow_amount<br/>- seller_id<br/>- order_id]
-    GetInfo --> GetCommissionRate[Lấy commission rate<br/>shop_commission_config<br/>hoặc default 5%]
+    Loop --> GetInfo[Lay info:<br/>- escrow_amount<br/>- seller_id<br/>- order_id]
+    GetInfo --> GetCommissionRate[Lay commission rate<br/>shop_commission_config<br/>hoac default 5%]
     GetCommissionRate --> CalcCommission[commission = amount × rate<br/>seller_receives = amount - commission]
     
     %% Validate Platform
-    CalcCommission --> CheckPlatform{Platform có đủ<br/>available >= amount?}
-    CheckPlatform -->|No| AlertCritical[🚨 CRITICAL<br/>Platform thiếu tiền!]
-    CheckPlatform -->|Yes| BeginTx[🔵 BEGIN Transaction]
+    CalcCommission --> CheckPlatform{Platform co du<br/>available >= amount?}
+    CheckPlatform -->|No| AlertCritical[ CRITICAL<br/>Platform thieu tien!]
+    CheckPlatform -->|Yes| BeginTx[ BEGIN Transaction]
     
     %% Deduct Platform
     BeginTx --> DeductPlatform[Transaction Platform<br/>Type: ESCROW_RELEASE<br/>direction: DEBIT<br/>amount: -escrow_amount]
@@ -673,11 +673,11 @@ flowchart TD
     %% Finalize
     UpdatePlatformCommission --> UpdateEscrow[Update EscrowHold<br/>status: RELEASED]
     UpdateEscrow --> ValidateInvariant{Validate?}
-    ValidateInvariant -->|FAIL| Rollback[🔴 ROLLBACK]
-    ValidateInvariant -->|PASS| Commit[🟢 COMMIT]
+    ValidateInvariant -->|FAIL| Rollback[ ROLLBACK]
+    ValidateInvariant -->|PASS| Commit[ COMMIT]
     
-    Commit --> NotifySeller[Notify Seller<br/>"Nhận {seller_receives} Trust"]
-    NotifySeller --> HasMore{Còn escrow?}
+    Commit --> NotifySeller[Notify Seller<br/>"Nhan {seller_receives} Trust"]
+    NotifySeller --> HasMore{Con escrow?}
     HasMore -->|Yes| Loop
     HasMore -->|No| End([Done])
     
@@ -692,30 +692,30 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([Seller nhấn "Rút tiền"])
+    Start([Seller nhan "Rut tien"])
     
     %% Show Info
-    Start --> ShowBalance[Hiển thị:<br/>Available: 1000 Trust<br/>Commission debt: 50 Trust<br/>Ước tính nhận: 950,000 VND]
-    ShowBalance --> UserInput[Seller nhập:<br/>- Số Trust: 500<br/>- Bank info]
+    Start --> ShowBalance[Hien thi:<br/>Available: 1000 Trust<br/>Commission debt: 50 Trust<br/>Ưoc tinh nhan: 950,000 VND]
+    ShowBalance --> UserInput[Seller nhap:<br/>- So Trust: 500<br/>- Bank info]
     
     %% Calculate
-    UserInput --> CalcCommission[Tính commission:<br/>rate = get_shop_rate(shop_id)<br/>commission = min(500 × rate, debt)<br/>VD: min(25, 50) = 25 Trust]
+    UserInput --> CalcCommission[Tinh commission:<br/>rate = get_shop_rate(shop_id)<br/>commission = min(500 × rate, debt)<br/>VD: min(25, 50) = 25 Trust]
     CalcCommission --> CalcNet[net = 500 - 25 = 475 Trust<br/>vnd = 475 × 1000 = 475,000 VND]
     
     %% Confirm
-    CalcNet --> ShowConfirm[Xác nhận:<br/>Rút: 500 Trust<br/>Commission: 25 Trust<br/>Nhận: 475,000 VND]
-    ShowConfirm --> Confirm{Xác nhận?}
-    Confirm -->|No| Cancel([Hủy])
-    Confirm -->|Yes| CreateRequest[Tạo WithdrawalRequest]
+    CalcNet --> ShowConfirm[Xac nhan:<br/>Rut: 500 Trust<br/>Commission: 25 Trust<br/>Nhan: 475,000 VND]
+    ShowConfirm --> Confirm{Xac nhan?}
+    Confirm -->|No| Cancel([Huy])
+    Confirm -->|Yes| CreateRequest[Tao WithdrawalRequest]
     
     %% Lock Funds
-    CreateRequest --> BeginTx1[🔵 BEGIN]
-    BeginTx1 --> LockTx[Lock 500 Trust<br/>available → withdrawal_locked]
-    LockTx --> CommitTx1[🟢 COMMIT]
+    CreateRequest --> BeginTx1[ BEGIN]
+    BeginTx1 --> LockTx[Lock 500 Trust<br/>available - withdrawal_locked]
+    LockTx --> CommitTx1[ COMMIT]
     
     %% Validation (Async)
     CommitTx1 --> EnqueueValidation[Enqueue: validate_withdrawal]
-    EnqueueValidation -.->|Async| RunValidation[Chạy Validation Engine]
+    EnqueueValidation -.->|Async| RunValidation[Chay Validation Engine]
     
     RunValidation --> ValidationResult{Result?}
     ValidationResult -->|FAIL| RejectWithdrawal[Reject + Unlock]
@@ -729,7 +729,7 @@ flowchart TD
     BankResult -->|SUCCESS| CompleteFlow[Complete Flow]
     
     %% Complete
-    CompleteFlow --> BeginTx2[🔵 BEGIN]
+    CompleteFlow --> BeginTx2[ BEGIN]
     BeginTx2 --> CompleteTx[Transaction<br/>Type: WITHDRAWAL_COMPLETED<br/>withdrawal_locked -= 500<br/>total -= 500]
     CompleteTx --> UpdateLifetime[Update Wallet<br/>lifetime_withdrawn += 500<br/>commission_debt -= 25]
     
@@ -738,10 +738,10 @@ flowchart TD
     CommissionToPlatform --> UpdatePlatform[Platform Wallet<br/>available += 25<br/>total += 25]
     
     UpdatePlatform --> ValidateInvariant{Validate?}
-    ValidateInvariant -->|FAIL| Rollback[🔴 ROLLBACK]
-    ValidateInvariant -->|PASS| CommitTx2[🟢 COMMIT]
+    ValidateInvariant -->|FAIL| Rollback[ ROLLBACK]
+    ValidateInvariant -->|PASS| CommitTx2[ COMMIT]
     
-    CommitTx2 --> NotifySeller[Notify Seller<br/>"Rút thành công"]
+    CommitTx2 --> NotifySeller[Notify Seller<br/>"Rut thanh công"]
     NotifySeller --> End([Done])
     
     style Start fill:#339af0,stroke:#1971c2
@@ -798,38 +798,38 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([Admin chọn "Nạp tiền thủ công"])
+    Start([Admin chon "Nap tien thu công"])
     
     %% Selection
-    Start --> SelectUser[Chọn User/Seller]
-    SelectUser --> ShowForm[Form nhập:<br/>- Số Trust<br/>- Lý do (bắt buộc)<br/>- Ghi chú]
+    Start --> SelectUser[Chon User/Seller]
+    SelectUser --> ShowForm[Form nhap:<br/>- So Trust<br/>- Ly do (bat buoc)<br/>- Ghi chu]
     
     %% Validation
     ShowForm --> Validate{Validate}
-    Validate -->|FAIL| Error[❌ Lỗi:<br/>- Trust > 0<br/>- Trust <= 1,000,000<br/>- Lý do >= 10 ký tự]
-    Validate -->|PASS| CheckPerm{Admin có quyền<br/>WALLET_DEPOSIT?}
-    CheckPerm -->|No| PermError[❌ Không có quyền]
-    CheckPerm -->|Yes| Confirm{Xác nhận?}
+    Validate -->|FAIL| Error[ Loi:<br/>- Trust > 0<br/>- Trust <= 1,000,000<br/>- Ly do >= 10 ky tu]
+    Validate -->|PASS| CheckPerm{Admin co quyen<br/>WALLET_DEPOSIT?}
+    CheckPerm -->|No| PermError[ Không co quyen]
+    CheckPerm -->|Yes| Confirm{Xac nhan?}
     
-    Confirm -->|No| Cancel([Hủy])
-    Confirm -->|Yes| BeginTx[🔵 BEGIN Transaction]
+    Confirm -->|No| Cancel([Huy])
+    Confirm -->|Yes| BeginTx[ BEGIN Transaction]
     
     %% Create Transaction
-    BeginTx --> CreateTx[Tạo Transaction<br/>Type: ADMIN_CREDIT<br/>Status: COMPLETED<br/>direction: CREDIT<br/>initiated_by: admin_id<br/>admin_note: reason]
+    BeginTx --> CreateTx[Tao Transaction<br/>Type: ADMIN_CREDIT<br/>Status: COMPLETED<br/>direction: CREDIT<br/>initiated_by: admin_id<br/>admin_note: reason]
     
     CreateTx --> UpdateWallet[Update Target Wallet<br/>available += amount<br/>total += amount<br/>lifetime_deposited += amount]
     
     %% Create Audit Log
-    UpdateWallet --> CreateAuditLog[Tạo AdminOperationLog<br/>operation: MANUAL_DEPOSIT<br/>admin_id, target_id<br/>amount, reason<br/>before_state, after_state]
+    UpdateWallet --> CreateAuditLog[Tao AdminOperationLog<br/>operation: MANUAL_DEPOSIT<br/>admin_id, target_id<br/>amount, reason<br/>before_state, after_state]
     
     %% Validate
     CreateAuditLog --> ValidateInvariant{Validate Invariant?}
-    ValidateInvariant -->|FAIL| Rollback[🔴 ROLLBACK<br/>Alert supervisor]
-    ValidateInvariant -->|PASS| Commit[🟢 COMMIT]
+    ValidateInvariant -->|FAIL| Rollback[ ROLLBACK<br/>Alert supervisor]
+    ValidateInvariant -->|PASS| Commit[ COMMIT]
     
     %% Notifications
-    Commit --> NotifyUser[Email User<br/>"Admin đã nạp X Trust"]
-    NotifyUser --> NotifySupervisor[Notify Supervisor<br/>nếu amount > threshold]
+    Commit --> NotifyUser[Email User<br/>"Admin da nap X Trust"]
+    NotifyUser --> NotifySupervisor[Notify Supervisor<br/>neu amount > threshold]
     NotifySupervisor --> End([Done])
     
     style Start fill:#ffd43b,stroke:#f08c00
@@ -843,45 +843,45 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([Admin chọn "Trừ tiền"])
+    Start([Admin chon "Tru tien"])
     
     %% Selection
-    Start --> SelectUser[Chọn User/Seller]
-    SelectUser --> ShowWallet[Hiển thị Wallet info:<br/>Available: X Trust<br/>Locked: Y Trust]
-    ShowWallet --> ShowForm[Form nhập:<br/>- Số Trust cần trừ<br/>- Lý do (bắt buộc)<br/>- Reference (order_id, etc)]
+    Start --> SelectUser[Chon User/Seller]
+    SelectUser --> ShowWallet[Hien thi Wallet info:<br/>Available: X Trust<br/>Locked: Y Trust]
+    ShowWallet --> ShowForm[Form nhap:<br/>- So Trust cần tru<br/>- Ly do (bat buoc)<br/>- Reference (order_id, etc)]
     
     %% Validation
     ShowForm --> Validate{Validate}
-    Validate -->|FAIL| Error[❌ Lỗi]
+    Validate -->|FAIL| Error[ Loi]
     Validate -->|PASS| CheckBalance{available >= amount?}
-    CheckBalance -->|No| BalanceError[❌ Số dư không đủ<br/>Chỉ có thể trừ: X Trust]
-    CheckBalance -->|Yes| CheckPerm{Admin có quyền<br/>WALLET_DEBIT?}
-    CheckPerm -->|No| PermError[❌ Không có quyền]
+    CheckBalance -->|No| BalanceError[ So dư không du<br/>Chi co the tru: X Trust]
+    CheckBalance -->|Yes| CheckPerm{Admin co quyen<br/>WALLET_DEBIT?}
+    CheckPerm -->|No| PermError[ Không co quyen]
     
     %% Supervisor Approval Required
     CheckPerm -->|Yes| CheckAmount{amount > 10,000 Trust?}
     CheckAmount -->|Yes| RequireSupervisor[Yêu cầu Supervisor<br/>approve qua 2FA]
     RequireSupervisor --> SupervisorApprove{Supervisor approve?}
-    SupervisorApprove -->|No| Reject([Bị từ chối])
+    SupervisorApprove -->|No| Reject([Bi tu choi])
     SupervisorApprove -->|Yes| Confirm
-    CheckAmount -->|No| Confirm{Admin xác nhận?}
+    CheckAmount -->|No| Confirm{Admin xac nhan?}
     
-    Confirm -->|No| Cancel([Hủy])
-    Confirm -->|Yes| BeginTx[🔵 BEGIN Transaction]
+    Confirm -->|No| Cancel([Huy])
+    Confirm -->|Yes| BeginTx[ BEGIN Transaction]
     
     %% Create Transaction
-    BeginTx --> CreateTx[Tạo Transaction<br/>Type: ADMIN_DEBIT<br/>Status: COMPLETED<br/>direction: DEBIT<br/>initiated_by: admin_id<br/>admin_note: reason]
+    BeginTx --> CreateTx[Tao Transaction<br/>Type: ADMIN_DEBIT<br/>Status: COMPLETED<br/>direction: DEBIT<br/>initiated_by: admin_id<br/>admin_note: reason]
     
     CreateTx --> UpdateWallet[Update Target Wallet<br/>available -= amount<br/>total -= amount]
     
     %% Audit Log
-    UpdateWallet --> CreateAuditLog[Tạo AdminOperationLog<br/>operation: MANUAL_DEBIT<br/>full audit trail]
+    UpdateWallet --> CreateAuditLog[Tao AdminOperationLog<br/>operation: MANUAL_DEBIT<br/>full audit trail]
     
     CreateAuditLog --> ValidateInvariant{Validate?}
-    ValidateInvariant -->|FAIL| Rollback[🔴 ROLLBACK]
-    ValidateInvariant -->|PASS| Commit[🟢 COMMIT]
+    ValidateInvariant -->|FAIL| Rollback[ ROLLBACK]
+    ValidateInvariant -->|PASS| Commit[ COMMIT]
     
-    Commit --> NotifyUser[Notify User<br/>"Tài khoản bị trừ X Trust"]
+    Commit --> NotifyUser[Notify User<br/>"Tai khoan bi tru X Trust"]
     NotifyUser --> End([Done])
     
     style Start fill:#ffd43b,stroke:#f08c00
@@ -893,36 +893,36 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([Admin chọn "Cài đặt Commission"])
+    Start([Admin chon "Cai dat Commission"])
     
     %% List Shops
-    Start --> ListShops[Hiển thị danh sách Shop<br/>với commission rate hiện tại]
-    ListShops --> SelectShop[Admin chọn Shop]
+    Start --> ListShops[Hien thi danh sach Shop<br/>voi commission rate hien tai]
+    ListShops --> SelectShop[Admin chon Shop]
     
     %% Show Form
     SelectShop --> ShowForm[Form:<br/>- Current rate: 5%<br/>- New rate: ____%<br/>- Effective from: ____<br/>- Effective to: ____ (optional)<br/>- Reason]
     
     %% Validation
     ShowForm --> Validate{Validate}
-    Validate -->|FAIL| Error[❌ Lỗi:<br/>- Rate: 1% - 20%<br/>- Effective from >= today]
-    Validate -->|PASS| ShowImpact[Hiển thị Impact:<br/>"Shop có 100 orders/tháng<br/>Thay đổi commission từ 5% → 3%<br/>Giảm thu: ~200,000 Trust/tháng"]
+    Validate -->|FAIL| Error[ Loi:<br/>- Rate: 1% - 20%<br/>- Effective from >= today]
+    Validate -->|PASS| ShowImpact[Hien thi Impact:<br/>"Shop co 100 orders/thang<br/>Thay doi commission tu 5% - 3%<br/>Giam thu: ~200,000 Trust/thang"]
     
-    ShowImpact --> Confirm{Admin xác nhận?}
-    Confirm -->|No| Cancel([Hủy])
-    Confirm -->|Yes| CheckPerm{Admin có quyền<br/>COMMISSION_MANAGE?}
-    CheckPerm -->|No| PermError[❌ Không có quyền]
-    CheckPerm -->|Yes| BeginTx[🔵 BEGIN]
+    ShowImpact --> Confirm{Admin xac nhan?}
+    Confirm -->|No| Cancel([Huy])
+    Confirm -->|Yes| CheckPerm{Admin co quyen<br/>COMMISSION_MANAGE?}
+    CheckPerm -->|No| PermError[ Không co quyen]
+    CheckPerm -->|Yes| BeginTx[ BEGIN]
     
     %% Save Config
-    BeginTx --> DeactivateOld[Deactivate config cũ<br/>effective_to = now]
-    DeactivateOld --> CreateNewConfig[Tạo shop_commission_config<br/>shop_id, rate<br/>effective_from, created_by]
+    BeginTx --> DeactivateOld[Deactivate config cu<br/>effective_to = now]
+    DeactivateOld --> CreateNewConfig[Tao shop_commission_config<br/>shop_id, rate<br/>effective_from, created_by]
     
     %% Audit
-    CreateNewConfig --> CreateAuditLog[Tạo AdminOperationLog<br/>operation: COMMISSION_OVERRIDE<br/>before_rate, after_rate]
-    CreateAuditLog --> Commit[🟢 COMMIT]
+    CreateNewConfig --> CreateAuditLog[Tao AdminOperationLog<br/>operation: COMMISSION_OVERRIDE<br/>before_rate, after_rate]
+    CreateAuditLog --> Commit[ COMMIT]
     
     %% Notify
-    Commit --> NotifyShop[Notify Shop Owner<br/>"Commission rate thay đổi"]
+    Commit --> NotifyShop[Notify Shop Owner<br/>"Commission rate thay doi"]
     NotifyShop --> End([Done])
     
     style Start fill:#ffd43b,stroke:#f08c00
@@ -936,38 +936,38 @@ flowchart TD
     Start([Admin xem Pending Withdrawals])
     
     %% List
-    Start --> ListPending[Danh sách Withdrawals<br/>Status: AWAITING_APPROVAL<br/>Sắp xếp theo risk_score DESC]
-    ListPending --> SelectOne[Admin chọn 1 withdrawal]
+    Start --> ListPending[Danh sach Withdrawals<br/>Status: AWAITING_APPROVAL<br/>Sap xep theo risk_score DESC]
+    ListPending --> SelectOne[Admin chon 1 withdrawal]
     
     %% Show Details
-    SelectOne --> ShowDetails[Hiển thị chi tiết:<br/>- User info<br/>- Amount: 10,000 Trust<br/>- Risk Score: 0.65<br/>- Validation Results<br/>- Recent transaction history]
+    SelectOne --> ShowDetails[Hien thi chi tiet:<br/>- User info<br/>- Amount: 10,000 Trust<br/>- Risk Score: 0.65<br/>- Validation Results<br/>- Recent transaction history]
     
-    ShowDetails --> ShowValidation[Hiển thị Validation Details:<br/>✅ Balance Check: PASS<br/>✅ Flow Check: PASS<br/>⚠️ Fraud Check: WARNING<br/>   - First withdrawal<br/>   - Large amount<br/>✅ Limit Check: PASS]
+    ShowDetails --> ShowValidation[Hien thi Validation Details:<br/> Balance Check: PASS<br/> Flow Check: PASS<br/> Fraud Check: WARNING<br/>   - First withdrawal<br/>   - Large amount<br/> Limit Check: PASS]
     
     %% Decision
-    ShowValidation --> Decision{Admin quyết định?}
+    ShowValidation --> Decision{Admin quyet dinh?}
     
     %% Approve
-    Decision -->|Approve| CheckPerm{Có quyền<br/>WITHDRAWAL_APPROVE?}
-    CheckPerm -->|No| PermError[❌ Không có quyền]
-    CheckPerm -->|Yes| ApproveConfirm{Xác nhận approve?}
+    Decision -->|Approve| CheckPerm{Co quyen<br/>WITHDRAWAL_APPROVE?}
+    CheckPerm -->|No| PermError[ Không co quyen]
+    CheckPerm -->|Yes| ApproveConfirm{Xac nhan approve?}
     ApproveConfirm -->|Yes| UpdateApprove[Update Request<br/>Status: APPROVED<br/>approved_by: admin_id<br/>approved_at: now]
-    UpdateApprove --> CreateApproveLog[Tạo AdminOperationLog<br/>operation: WITHDRAWAL_APPROVE]
+    UpdateApprove --> CreateApproveLog[Tao AdminOperationLog<br/>operation: WITHDRAWAL_APPROVE]
     CreateApproveLog --> EnqueueProcess[Enqueue: process_withdrawal]
-    EnqueueProcess --> NotifyUser1[Notify User<br/>"Yêu cầu rút tiền đã được duyệt"]
+    EnqueueProcess --> NotifyUser1[Notify User<br/>"Yêu cầu rut tien da dưoc duyet"]
     
     %% Reject
-    Decision -->|Reject| RejectForm[Form nhập lý do từ chối]
+    Decision -->|Reject| RejectForm[Form nhap ly do tu choi]
     RejectForm --> UpdateReject[Update Request<br/>Status: REJECTED<br/>reject_reason: reason]
-    UpdateReject --> UnlockFunds[Unlock funds<br/>withdrawal_locked → available]
-    UnlockFunds --> CreateRejectLog[Tạo AdminOperationLog<br/>operation: WITHDRAWAL_REJECT]
-    CreateRejectLog --> NotifyUser2[Notify User<br/>"Yêu cầu bị từ chối: reason"]
+    UpdateReject --> UnlockFunds[Unlock funds<br/>withdrawal_locked - available]
+    UnlockFunds --> CreateRejectLog[Tao AdminOperationLog<br/>operation: WITHDRAWAL_REJECT]
+    CreateRejectLog --> NotifyUser2[Notify User<br/>"Yêu cầu bi tu choi: reason"]
     
     %% Hold for Investigation
-    Decision -->|Hold| HoldForm[Form nhập lý do hold]
+    Decision -->|Hold| HoldForm[Form nhap ly do hold]
     HoldForm --> UpdateHold[Update Request<br/>Status: HOLD]
-    UpdateHold --> CreateHoldLog[Tạo AdminOperationLog]
-    CreateHoldLog --> NotifyUser3[Notify User<br/>"Yêu cầu đang được điều tra"]
+    UpdateHold --> CreateHoldLog[Tao AdminOperationLog]
+    CreateHoldLog --> NotifyUser3[Notify User<br/>"Yêu cầu dang dưoc dieu tra"]
     
     NotifyUser1 --> End([Done])
     NotifyUser2 --> End
@@ -1062,14 +1062,14 @@ flowchart TD
     Start([Check Balance Integrity])
     
     %% Get Snapshot
-    Start --> GetSnapshot[Lấy MonthlySnapshot<br/>của tháng trước]
-    GetSnapshot --> HasSnapshot{Có snapshot?}
+    Start --> GetSnapshot[Lay MonthlySnapshot<br/>cua thang trưoc]
+    GetSnapshot --> HasSnapshot{Co snapshot?}
     
-    HasSnapshot -->|No| FullCalc[Tính từ đầu<br/>Σ(all transactions)]
-    HasSnapshot -->|Yes| IncrementalCalc[Tính incremental<br/>từ snapshot]
+    HasSnapshot -->|No| FullCalc[Tinh tu dầu<br/>Σ(all transactions)]
+    HasSnapshot -->|Yes| IncrementalCalc[Tinh incremental<br/>tu snapshot]
     
     %% Incremental Calculation (Performance Optimized)
-    IncrementalCalc --> GetCurrentMonth[Query transactions<br/>từ đầu tháng này đến now<br/>WHERE created_at >= month_start]
+    IncrementalCalc --> GetCurrentMonth[Query transactions<br/>tu dầu thang nay den now<br/>WHERE created_at >= month_start]
     GetCurrentMonth --> CalcDelta[delta_credit = Σ(credits this month)<br/>delta_debit = Σ(debits this month)]
     CalcDelta --> CalcExpected[expected_balance = <br/>snapshot_balance + delta_credit - delta_debit]
     
@@ -1077,12 +1077,12 @@ flowchart TD
     CalcExpected --> Compare{expected == wallet.total_trust?}
     FullCalc --> Compare
     
-    Compare -->|Yes| Pass[✅ PASS<br/>Balance integrity verified]
+    Compare -->|Yes| Pass[ PASS<br/>Balance integrity verified]
     Compare -->|No| CalcDiscrepancy[discrepancy = expected - actual]
     
     CalcDiscrepancy --> CheckSeverity{abs(discrepancy) > 100?}
-    CheckSeverity -->|Yes| CriticalFail[❌ CRITICAL FAIL<br/>Major discrepancy detected<br/>Auto-reject withdrawal]
-    CheckSeverity -->|No| WarningFail[⚠️ WARNING<br/>Minor discrepancy<br/>Flag for review]
+    CheckSeverity -->|Yes| CriticalFail[ CRITICAL FAIL<br/>Major discrepancy detected<br/>Auto-reject withdrawal]
+    CheckSeverity -->|No| WarningFail[ WARNING<br/>Minor discrepancy<br/>Flag for review]
     
     Pass --> ReturnResult[Return CheckResult<br/>passed: true]
     CriticalFail --> ReturnResult2[Return CheckResult<br/>passed: false<br/>severity: CRITICAL]
@@ -1117,14 +1117,14 @@ flowchart TD
     Start([Check Flow Validation])
     
     %% Get Data
-    Start --> GetWallet[Lấy Wallet với running totals]
+    Start --> GetWallet[Lay Wallet voi running totals]
     GetWallet --> GetRunningTotals[lifetime_deposited<br/>lifetime_withdrawn<br/>lifetime_spent<br/>lifetime_received]
     
     %% Calculate Expected Balance
     GetRunningTotals --> CalcExpected[expected_balance = <br/>deposited - withdrawn + received - spent]
     
     %% Get Active Escrow
-    CalcExpected --> GetActiveEscrow[Lấy active escrows<br/>mà user là buyer]
+    CalcExpected --> GetActiveEscrow[Lay active escrows<br/>ma user la buyer]
     GetActiveEscrow --> CalcEscrowOut[escrow_out = Σ(escrows where buyer)]
     
     %% Adjusted Expected
@@ -1133,11 +1133,11 @@ flowchart TD
     %% Compare
     AdjustExpected --> Compare{adjusted_expected >= wallet.total_trust?}
     
-    Compare -->|Yes| Pass[✅ PASS<br/>Flow validation OK]
-    Compare -->|No| Fail[❌ FAIL<br/>Flow không khớp<br/>Có thể có giao dịch ẩn/hack]
+    Compare -->|Yes| Pass[ PASS<br/>Flow validation OK]
+    Compare -->|No| Fail[ FAIL<br/>Flow không khop<br/>Co the co giao dich an/hack]
     
     Pass --> Return1[Return CheckResult: passed]
-    Fail --> Return2[Return CheckResult: failed<br/>reason: "Dòng tiền không khớp"]
+    Fail --> Return2[Return CheckResult: failed<br/>reason: "Dong tien không khop"]
     
     style Start fill:#339af0,stroke:#1971c2
     style Pass fill:#51cf66,stroke:#2f9e44
@@ -1170,7 +1170,7 @@ flowchart TD
     Start --> InitScore[risk_score = 0.0]
     
     %% Pattern 1: Too many withdrawals today
-    InitScore --> Check1[Pattern 1: Rút nhiều trong ngày]
+    InitScore --> Check1[Pattern 1: Rut nhieu trong ngay]
     Check1 --> Query1[today_withdrawals = count(*)<br/>WHERE type = WITHDRAWAL<br/>AND created_at >= today_start]
     Query1 --> Eval1{today_withdrawals >= 5?}
     Eval1 -->|Yes| Add1[risk_score += 0.3]
@@ -1178,7 +1178,7 @@ flowchart TD
     Add1 --> Check2
     
     %% Pattern 2: Large sudden withdrawal
-    Check2 --> Check2a[Pattern 2: Rút đột ngột lớn]
+    Check2 --> Check2a[Pattern 2: Rut dot ngot lon]
     Check2a --> Query2[avg_balance_30d = AVG(daily balance)]
     Query2 --> Eval2{withdrawal > avg × 5?}
     Eval2 -->|Yes| Add2[risk_score += 0.4]
@@ -1186,7 +1186,7 @@ flowchart TD
     Add2 --> Check3
     
     %% Pattern 3: New account rapid withdrawal
-    Check3 --> Check3a[Pattern 3: Account mới rút nhanh]
+    Check3 --> Check3a[Pattern 3: Account moi rut nhanh]
     Check3a --> GetAge[account_age = now - created_at]
     GetAge --> Eval3{age < 7 days AND<br/>withdrawal > 1000?}
     Eval3 -->|Yes| Add3[risk_score += 0.5]
@@ -1194,7 +1194,7 @@ flowchart TD
     Add3 --> Check4
     
     %% Pattern 4: First withdrawal
-    Check4 --> Check4a[Pattern 4: Lần rút đầu tiên]
+    Check4 --> Check4a[Pattern 4: Lần rut dầu tiên]
     Check4a --> Query4[prev_withdrawals = count(*)]
     Query4 --> Eval4{prev_withdrawals == 0?}
     Eval4 -->|Yes| Add4[risk_score += 0.2]
@@ -1202,7 +1202,7 @@ flowchart TD
     Add4 --> Check5
     
     %% Pattern 5: Unusual timing
-    Check5 --> Check5a[Pattern 5: Thời gian bất thường]
+    Check5 --> Check5a[Pattern 5: Thoi gian bat thưong]
     Check5a --> GetHour[hour = now.hour()]
     GetHour --> Eval5{hour >= 0 AND hour < 6?}
     Eval5 -->|Yes| Add5[risk_score += 0.1]
@@ -1211,9 +1211,9 @@ flowchart TD
     
     %% Aggregate
     Aggregate --> Decision{risk_score?}
-    Decision -->|< 0.3| Pass[✅ PASS - Auto approve]
-    Decision -->|0.3 - 0.7| Review[⚠️ REVIEW - Manual check]
-    Decision -->|>= 0.7| Reject[❌ REJECT - Auto reject]
+    Decision -->|< 0.3| Pass[ PASS - Auto approve]
+    Decision -->|0.3 - 0.7| Review[ REVIEW - Manual check]
+    Decision -->|>= 0.7| Reject[ REJECT - Auto reject]
     
     Pass --> Return1[Return: passed=true, risk=low]
     Review --> Return2[Return: passed=true, risk=medium]
@@ -1273,16 +1273,16 @@ flowchart TD
     CheckReason -->|Limit Exceeded| LimitAction[Action:<br/>1. Reject withdrawal<br/>2. Inform user of limits<br/>3. Suggest smaller amount]
     
     %% Common Actions
-    BalanceAction --> UnlockFunds[Unlock funds<br/>withdrawal_locked → available<br/>(nếu không freeze)]
+    BalanceAction --> UnlockFunds[Unlock funds<br/>withdrawal_locked - available<br/>(neu không freeze)]
     FlowAction --> UnlockFunds
     FraudAction --> UnlockFunds
     LimitAction --> UnlockFunds
     
     UnlockFunds --> UpdateRequest[Update WithdrawalRequest<br/>Status: REJECTED/VALIDATION_FAILED<br/>validation_errors: [...]<br/>reject_reason: detail]
     
-    UpdateRequest --> CreateTx[Tạo Transaction<br/>Type: WITHDRAWAL_REJECTED<br/>Reverse lock transaction]
+    UpdateRequest --> CreateTx[Tao Transaction<br/>Type: WITHDRAWAL_REJECTED<br/>Reverse lock transaction]
     
-    CreateTx --> NotifyUser[Notify User<br/>"Yêu cầu rút tiền bị từ chối<br/>Lý do: {reason}"]
+    CreateTx --> NotifyUser[Notify User<br/>"Yêu cầu rut tien bi tu choi<br/>Ly do: {reason}"]
     
     NotifyUser --> End([Done])
     
@@ -1296,7 +1296,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([Admin chọn HOLD])
+    Start([Admin chon HOLD])
     
     %% Create Hold
     Start --> UpdateRequest[Update WithdrawalRequest<br/>Status: HOLD<br/>hold_reason: reason<br/>hold_at: now<br/>hold_by: admin_id]
@@ -1305,19 +1305,19 @@ flowchart TD
     UpdateRequest --> Note[Funds REMAIN in withdrawal_locked<br/>User cannot use or re-request]
     
     %% Create Investigation
-    Note --> CreateTicket[Tạo Investigation Ticket<br/>type: WITHDRAWAL_HOLD<br/>priority: based on amount<br/>assigned_to: security_team]
+    Note --> CreateTicket[Tao Investigation Ticket<br/>type: WITHDRAWAL_HOLD<br/>priority: based on amount<br/>assigned_to: security_team]
     
     %% Notify
-    CreateTicket --> NotifyUser[Notify User<br/>"Yêu cầu đang được xem xét<br/>Vui lòng chờ 1-3 ngày làm việc"]
+    CreateTicket --> NotifyUser[Notify User<br/>"Yêu cầu dang dưoc xem xet<br/>Vui long cho 1-3 ngay lam viec"]
     NotifyUser --> NotifyAdmin[Notify Security Team<br/>"New hold case: {request_id}"]
     
     %% Investigation Options
     NotifyAdmin --> InvestigationEnd([Investigation...])
-    InvestigationEnd --> Decision{Kết quả điều tra?}
+    InvestigationEnd --> Decision{Ket qua dieu tra?}
     
-    Decision -->|Clear| Release[Release HOLD<br/>→ APPROVED<br/>→ Process withdrawal]
-    Decision -->|Suspicious| Reject[REJECT<br/>→ Unlock funds<br/>→ Possible account action]
-    Decision -->|Confirmed Fraud| Block[REJECT<br/>→ FREEZE account<br/>→ Report authorities]
+    Decision -->|Clear| Release[Release HOLD<br/>- APPROVED<br/>- Process withdrawal]
+    Decision -->|Suspicious| Reject[REJECT<br/>- Unlock funds<br/>- Possible account action]
+    Decision -->|Confirmed Fraud| Block[REJECT<br/>- FREEZE account<br/>- Report authorities]
     
     style Start fill:#ffd43b,stroke:#f08c00
     style Block fill:#ff6b6b,stroke:#c92a2a,stroke-width:3px
@@ -1361,34 +1361,34 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start([Cron: Ngày 1 mỗi tháng, 2:00 AM])
+    Start([Cron: Ngay 1 moi thang, 2:00 AM])
     
-    Start --> GetMonth[target_month = tháng trước<br/>VD: 2025-12]
-    GetMonth --> QueryWallets[Query tất cả wallets<br/>status IN (ACTIVE, SUSPENDED)]
-    QueryWallets --> Loop[Lặp từng wallet]
+    Start --> GetMonth[target_month = thang trưoc<br/>VD: 2025-12]
+    GetMonth --> QueryWallets[Query tat ca wallets<br/>status IN (ACTIVE, SUSPENDED)]
+    QueryWallets --> Loop[Lap tung wallet]
     
     Loop --> GetWallet[Get wallet current state]
     GetWallet --> GetLastSnapshot[Get last verified snapshot]
     
     %% Calculate
-    GetLastSnapshot --> QueryTxs[Query transactions<br/>từ last_snapshot đến end_of_month]
+    GetLastSnapshot --> QueryTxs[Query transactions<br/>tu last_snapshot den end_of_month]
     QueryTxs --> CalcBalance[calculated = last_snapshot_balance<br/>+ Σ(credits) - Σ(debits)]
     
     %% Compare
     CalcBalance --> Compare{calculated == wallet.total<br/>at end of month?}
-    Compare -->|Match| CreateVerified[Tạo snapshot<br/>status: VERIFIED]
+    Compare -->|Match| CreateVerified[Tao snapshot<br/>status: VERIFIED]
     Compare -->|Mismatch| CalcDiscrepancy[discrepancy = calc - actual]
     
     CalcDiscrepancy --> CheckSeverity{abs(discrepancy) > 100?}
-    CheckSeverity -->|Yes| CreateCritical[Tạo snapshot<br/>status: CRITICAL<br/>Alert admin]
-    CheckSeverity -->|No| CreateDiscrepancy[Tạo snapshot<br/>status: DISCREPANCY<br/>Warning]
+    CheckSeverity -->|Yes| CreateCritical[Tao snapshot<br/>status: CRITICAL<br/>Alert admin]
+    CheckSeverity -->|No| CreateDiscrepancy[Tao snapshot<br/>status: DISCREPANCY<br/>Warning]
     
     %% Update Wallet
     CreateVerified --> UpdateWallet[Update wallet<br/>last_snapshot_month<br/>last_snapshot_balance<br/>last_snapshot_verified]
     CreateCritical --> UpdateWallet
     CreateDiscrepancy --> UpdateWallet
     
-    UpdateWallet --> HasMore{Còn wallet?}
+    UpdateWallet --> HasMore{Con wallet?}
     HasMore -->|Yes| Loop
     HasMore -->|No| GenerateReport[Generate monthly report]
     GenerateReport --> End([Done])
@@ -1498,11 +1498,11 @@ db.escrow_holds.createIndex(
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING: User tạo request
+    [*] --> PENDING: User tao request
     
-    PENDING --> PROCESSING: Gateway nhận request
-    PENDING --> CANCELLED: User hủy
-    PENDING --> EXPIRED: Timeout 15 phút
+    PENDING --> PROCESSING: Gateway nhan request
+    PENDING --> CANCELLED: User huy
+    PENDING --> EXPIRED: Timeout 15 phut
     
     PROCESSING --> COMPLETED: Payment success
     PROCESSING --> FAILED: Payment failed
@@ -1517,7 +1517,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING: User tạo request
+    [*] --> PENDING: User tao request
     
     PENDING --> VALIDATING: Start validation
     
@@ -1660,25 +1660,25 @@ flowchart TD
     Start --> Check1[Check 1: System Total]
     Check1 --> Calc1[total_wallets = Σ(wallet.total_trust)<br/>total_deposits = Σ(DEPOSIT_COMPLETED)<br/>total_withdrawals = Σ(WITHDRAWAL_COMPLETED)]
     Calc1 --> Compare1{total_wallets == deposits - withdrawals?}
-    Compare1 -->|No| Alert1[🚨 CRITICAL: System leak]
-    Compare1 -->|Yes| Pass1[✅ Check 1 passed]
+    Compare1 -->|No| Alert1[ CRITICAL: System leak]
+    Compare1 -->|Yes| Pass1[ Check 1 passed]
     
     Pass1 --> Check2[Check 2: Platform Escrow]
     Check2 --> Calc2[platform_balance = Platform.available<br/>active_escrows = Σ(EscrowHold HOLDING)]
     Calc2 --> Compare2{platform_balance >= active_escrows?}
-    Compare2 -->|No| Alert2[🚨 CRITICAL: Platform shortage]
-    Compare2 -->|Yes| Pass2[✅ Check 2 passed]
+    Compare2 -->|No| Alert2[ CRITICAL: Platform shortage]
+    Compare2 -->|Yes| Pass2[ Check 2 passed]
     
     Pass2 --> Check3[Check 3: VND ↔ Trust]
     Check3 --> Calc3[vnd_in = Σ(deposit.vnd_amount)<br/>trust_in = Σ(deposit.trust_amount)]
     Calc3 --> Compare3{vnd_in / 1000 == trust_in?}
-    Compare3 -->|No| Alert3[🚨 Conversion mismatch]
-    Compare3 -->|Yes| Pass3[✅ Check 3 passed]
+    Compare3 -->|No| Alert3[ Conversion mismatch]
+    Compare3 -->|Yes| Pass3[ Check 3 passed]
     
     Pass3 --> Check4[Check 4: Commission Balance]
     Check4 --> Calc4[commission_collected = Σ(COMMISSION_COLLECTED)<br/>commission_debt = Σ(seller.commission_debt)]
-    Calc4 --> Note4[Note: collected may < debt<br/>debt giảm khi withdraw]
-    Note4 --> Pass4[✅ Check 4 passed]
+    Calc4 --> Note4[Note: collected may < debt<br/>debt giam khi withdraw]
+    Note4 --> Pass4[ Check 4 passed]
     
     Pass4 --> GenerateReport[Generate Daily Report]
     Alert1 --> GenerateReport
