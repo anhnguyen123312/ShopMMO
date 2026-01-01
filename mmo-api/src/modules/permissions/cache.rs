@@ -2,7 +2,7 @@
 //!
 //! Redis-based caching for user permissions with version validation.
 
-use redis::{aio::ConnectionManager, Client, AsyncCommands};
+use redis::{aio::ConnectionManager, Client, AsyncCommands, Script};
 
 /// Permission cache using Redis
 ///
@@ -98,6 +98,44 @@ impl PermissionCache {
         let _: i32 = conn.del(format!("role:{}:permissions", role_name)).await?;
         Ok(())
     }
+
+    /// Atomic permission check using Lua script
+    ///
+    /// Returns:
+    ///   - Ok(Some(true)): User has permission
+    ///   - Ok(Some(false)): User doesn't have permission
+    ///   - Ok(None): Cache miss or stale version (needs refresh from DB)
+    ///
+    /// # Arguments
+    /// * `user_id` - User identifier
+    /// * `permission` - Permission string to check (e.g., "products:create")
+    /// * `jwt_version` - Permission version from JWT token
+    pub async fn check_permission_atomic(
+        &self,
+        user_id: &str,
+        permission: &str,
+        jwt_version: i32,
+    ) -> Result<Option<bool>, redis::RedisError> {
+        let mut conn = ConnectionManager::new(self.client.clone()).await?;
+
+        // Load Lua script
+        let script = Script::new(include_str!("../../scripts/check_permission.lua"));
+
+        let result: i32 = script
+            .key(format!("user:{}:permissions", user_id))
+            .key(format!("user:{}:perm_version", user_id))
+            .arg(permission)
+            .arg(jwt_version)
+            .invoke_async(&mut conn)
+            .await?;
+
+        match result {
+            1 => Ok(Some(true)),   // Authorized
+            0 => Ok(Some(false)),  // Denied
+            -1 => Ok(None),        // Cache miss or stale
+            _ => Ok(Some(false)),  // Default to denied
+        }
+    }
 }
 
 #[cfg(test)]
@@ -141,5 +179,33 @@ mod tests {
 
         let result = cache.check_permission("user_1", "products:read", 6).await.unwrap();
         assert_eq!(result, false); // Stale version
+    }
+
+    #[ignore] // Requires Redis running
+    #[tokio::test]
+    async fn test_check_permission_atomic() {
+        let cache = PermissionCache::new("redis://localhost:6379")
+            .await
+            .unwrap();
+
+        cache.set_permissions("user_2", &vec!["products:create".to_string()], 3)
+            .await
+            .unwrap();
+
+        // Correct version - has permission
+        let result = cache.check_permission_atomic("user_2", "products:create", 3).await.unwrap();
+        assert_eq!(result, Some(true));
+
+        // Correct version - doesn't have permission
+        let result = cache.check_permission_atomic("user_2", "products:delete", 3).await.unwrap();
+        assert_eq!(result, Some(false));
+
+        // Stale version
+        let result = cache.check_permission_atomic("user_2", "products:create", 4).await.unwrap();
+        assert_eq!(result, None); // Cache miss/stale
+
+        // No user in cache
+        let result = cache.check_permission_atomic("nonexistent", "products:read", 1).await.unwrap();
+        assert_eq!(result, None);
     }
 }
