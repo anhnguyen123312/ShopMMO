@@ -1,0 +1,133 @@
+# ============================================================================
+# Docker Compose for MMO API
+# ============================================================================
+# 
+# Usage:
+#   docker-compose up -d          # Start all services
+#   docker-compose down           # Stop all services
+#   docker-compose logs -f app    # View app logs
+#   docker-compose build          # Rebuild app image
+#
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # MongoDB Database
+  # ==========================================================================
+  mongodb:
+    image: mongo:7.0
+    container_name: mmo-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mmo_admin
+      MONGO_INITDB_ROOT_PASSWORD: mmo_secret_password
+      MONGO_INITDB_DATABASE: mmo_db
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    ports:
+      - "27017:27017"
+    networks:
+      - mmo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ==========================================================================
+  # Redis Cache
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: mmo-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass mmo_redis_password
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - mmo-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "mmo_redis_password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # MMO API Application
+  # ==========================================================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mmo-api
+    restart: unless-stopped
+    environment:
+      # Server
+      HOST: 0.0.0.0
+      PORT: 8080
+      ENVIRONMENT: development
+      RUST_LOG: info
+      
+      # MongoDB
+      MONGODB_URI: mongodb://mmo_admin:mmo_secret_password@mongodb:27017
+      MONGODB_DATABASE: mmo_db
+      MONGODB_MAX_POOL_SIZE: 100
+      MONGODB_MIN_POOL_SIZE: 10
+      
+      # Redis
+      REDIS_URI: redis://:mmo_redis_password@redis:6379
+      REDIS_POOL_SIZE: 10
+      
+      # JWT (change in production!)
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      JWT_ACCESS_TOKEN_EXPIRES_IN: 15m
+      JWT_REFRESH_TOKEN_EXPIRES_IN: 7d
+      
+      # Security
+      BCRYPT_COST: 12
+      PASSWORD_MIN_LENGTH: 8
+      
+      # Rate Limiting
+      RATE_LIMIT_PER_SECOND: 10
+      RATE_LIMIT_BURST_SIZE: 20
+      
+      # CORS
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
+      CORS_ALLOW_CREDENTIALS: true
+    ports:
+      - "8080:8080"
+    networks:
+      - mmo-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# ==========================================================================
+# Volumes
+# ==========================================================================
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_config:
+    driver: local
+  redis_data:
+    driver: local
+
+# ==========================================================================
+# Networks
+# ==========================================================================
+networks:
+  mmo-network:
+    driver: bridge

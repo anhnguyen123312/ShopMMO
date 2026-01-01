@@ -147,10 +147,10 @@ impl AuthService {
     pub async fn refresh_token(&self, req: RefreshTokenRequest) -> Result<AuthResponse, ServiceError> {
         // Verify refresh token JWT
         let claims = utils::verify_token(&req.refresh_token, &self.config.jwt.secret)
-            .map_err(|_| ServiceError::Unauthorized)?;
+            .map_err(|_| ServiceError::Unauthorized("Invalid refresh token".to_string()))?;
 
         if claims.token_type != "refresh" {
-            return Err(ServiceError::Unauthorized);
+            return Err(ServiceError::Unauthorized("Invalid token type".to_string()));
         }
 
         // Check if token exists and not revoked in database
@@ -159,7 +159,7 @@ impl AuthService {
             .find_by_token(&req.refresh_token)
             .await
             .map_err(|e| ServiceError::DatabaseError(e.to_string()))?
-            .ok_or(ServiceError::Unauthorized)?;
+            .ok_or(ServiceError::Unauthorized("Token not found or revoked".to_string()))?;
 
         // Get user
         let user = self
@@ -258,9 +258,14 @@ impl AuthService {
         let access_expires = utils::jwt::parse_duration(&self.config.jwt.access_token_expires_in);
         let refresh_expires_days = utils::jwt::parse_duration(&self.config.jwt.refresh_token_expires_in) / (60 * 24);
 
+        // TODO: Get actual wallet_id from wallet service
+        // For now, use user_id as wallet_id (wallet will be created on first access)
+        let wallet_id = format!("WLT-{}", user_id);
+
         // Generate access token
         let access_token = utils::generate_access_token(
             &user_id,
+            &wallet_id,
             &user.email,
             &user.role,
             &self.config.jwt.secret,
@@ -271,6 +276,7 @@ impl AuthService {
         // Generate refresh token
         let refresh_token = utils::generate_refresh_token(
             &user_id,
+            &wallet_id,
             &user.email,
             &user.role,
             &self.config.jwt.secret,

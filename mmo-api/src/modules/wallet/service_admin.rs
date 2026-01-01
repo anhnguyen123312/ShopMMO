@@ -134,7 +134,7 @@ impl WalletService {
             after_state: serde_json::json!({"status": WalletStatus::Frozen}),
             amount: None,
             reason: req.reason,
-            note: req.note,
+            note: Some(req.case_reference),
             transaction_id: None,
             ip_address: "0.0.0.0".to_string(),
             user_agent: "".to_string(),
@@ -187,8 +187,8 @@ impl WalletService {
             before_state: serde_json::json!({"status": before_status}),
             after_state: serde_json::json!({"status": WalletStatus::Active}),
             amount: None,
-            reason: req.reason,
-            note: req.note,
+            reason: "Wallet unfrozen".to_string(),
+            note: Some(req.resolution_note),
             transaction_id: None,
             ip_address: "0.0.0.0".to_string(),
             user_agent: "".to_string(),
@@ -242,14 +242,12 @@ impl WalletService {
         // Save commission config
         let config = ShopCommissionConfig {
             id: None,
-            config_id: Self::generate_id("COMM"),
             shop_id: req.shop_id.clone(),
-            seller_user_id: req.seller_user_id.clone(),
-            seller_wallet_id: wallet.wallet_id.clone(),
-            commission_rate: req.commission_rate,
+            rate: req.commission_rate,
             effective_from: BsonDateTime::now(),
+            effective_to: None,
+            created_by: admin_id.clone(),
             reason: req.reason.clone(),
-            set_by_admin_id: admin_id.clone(),
             created_at: BsonDateTime::now(),
         };
         self.repo.create_commission_config(config).await?;
@@ -294,12 +292,13 @@ impl WalletService {
         limit: Option<i64>,
     ) -> Result<TransactionHistoryResponse, ServiceError> {
         let limit = limit.unwrap_or(50).min(100); // Max 100
-        let transactions = self.repo.get_recent_transactions(wallet_id, limit).await?;
+        let transactions = self.repo.find_transactions_by_wallet(wallet_id, None, None, limit, 0).await?;
 
+        let count = transactions.len() as i64;
         Ok(TransactionHistoryResponse {
             wallet_id: wallet_id.to_string(),
             transactions,
-            count: transactions.len() as i64,
+            count,
         })
     }
 
@@ -311,14 +310,15 @@ impl WalletService {
     ) -> Result<AdminLogResponse, ServiceError> {
         let limit = limit.unwrap_or(50).min(100);
         let logs = if let Some(tid) = target_id {
-            self.repo.get_admin_logs_by_target(&tid, limit).await?
+            self.repo.find_admin_logs_by_target(&tid, limit).await?
         } else {
             self.repo.get_recent_admin_logs(limit).await?
         };
 
+        let count = logs.len() as i64;
         Ok(AdminLogResponse {
             logs,
-            count: logs.len() as i64,
+            count,
         })
     }
 
@@ -340,9 +340,9 @@ impl WalletService {
             .ok_or_else(|| ServiceError::NotFound("Withdrawal request not found".to_string()))?;
 
         // Check status
-        if req.status != WithdrawalStatus::Pending && req.status != WithdrawalStatus::Validated {
+        if req.status != WithdrawalStatus::Pending && req.status != WithdrawalStatus::Validating {
             return Err(ServiceError::BadRequest(
-                "Can only approve pending or validated withdrawals".to_string(),
+                "Can only approve pending or validating withdrawals".to_string(),
             ));
         }
 
@@ -352,7 +352,7 @@ impl WalletService {
         req.approved_at = Some(BsonDateTime::now());
         req.updated_at = BsonDateTime::now();
 
-        self.repo.update_withdrawal(&req).await?;
+        self.repo.update_withdrawal_request(&req).await?;
 
         // Create admin log
         let log = AdminOperationLog {
@@ -414,7 +414,8 @@ impl WalletService {
 
         // Use MongoDB transaction
         let mut session = self.repo.start_session().await?;
-        session.start_transaction(None).await?;
+        session.start_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to start transaction: {}", e)))?;
 
         // Unlock funds: withdrawal_locked -> available
         let tx_id = Self::generate_id("TXN");
@@ -440,9 +441,11 @@ impl WalletService {
         // Update withdrawal status
         withdrawal_req.status = WithdrawalStatus::Rejected;
         withdrawal_req.updated_at = BsonDateTime::now();
-        withdrawal_req
-            .validation_errors
-            .push(req.rejection_reason.clone());
+        withdrawal_req.validation_errors.push(ValidationError {
+            error_type: "REJECTED".to_string(),
+            message: req.rejection_reason.clone(),
+            severity: Severity::Error,
+        });
 
         // Save
         self.repo
@@ -479,7 +482,8 @@ impl WalletService {
             .create_admin_log_with_session(log, &mut session)
             .await?;
 
-        session.commit_transaction().await?;
+        session.commit_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to commit transaction: {}", e)))?;
 
         Ok(SuccessResponse::new(format!(
             "Withdrawal {} rejected. Funds unlocked and returned to available balance.",
@@ -517,7 +521,8 @@ impl WalletService {
 
         // Use MongoDB transaction
         let mut session = self.repo.start_session().await?;
-        session.start_transaction(None).await?;
+        session.start_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to start transaction: {}", e)))?;
 
         let now = BsonDateTime::now();
 
@@ -551,7 +556,7 @@ impl WalletService {
 
         // Update withdrawal status
         withdrawal_req.status = WithdrawalStatus::Completed;
-        withdrawal_req.bank_transfer_ref = Some(req.bank_transfer_ref);
+        withdrawal_req.bank_transfer_ref = Some(req.bank_transfer_ref.clone());
         withdrawal_req.bank_transfer_at = Some(now);
         withdrawal_req.completed_at = Some(now);
         withdrawal_req.updated_at = now;
@@ -591,7 +596,8 @@ impl WalletService {
             .create_admin_log_with_session(log, &mut session)
             .await?;
 
-        session.commit_transaction().await?;
+        session.commit_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to commit transaction: {}", e)))?;
 
         Ok(SuccessResponse::new(format!(
             "Bank transfer completed. {} VND sent to user. Commission deducted: {} Trust.",

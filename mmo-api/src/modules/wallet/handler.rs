@@ -271,7 +271,7 @@ pub async fn get_transaction_history(
     query: web::Query<TransactionHistoryQuery>,
 ) -> Result<HttpResponse, ApiError> {
     let response = service
-        .get_transaction_history(&auth.wallet_id, query.limit)
+        .get_transaction_history(&auth.wallet_id, query.page_size)
         .await?;
     Ok(HttpResponse::Ok().json(ApiResponse::success(response)))
 }

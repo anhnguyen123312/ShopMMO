@@ -3,16 +3,18 @@
 //! MongoDB database operations for wallet system
 
 use bson::{doc, oid::ObjectId, DateTime as BsonDateTime};
-use mongodb::{Collection, Database, options::{FindOneOptions, FindOptions}, ClientSession};
+use mongodb::{Collection, Database, Client, options::{FindOneOptions, FindOptions}, ClientSession};
 use futures::stream::TryStreamExt;
 use std::sync::Arc;
 
 use crate::core::error::DbError;
+use crate::database::MongoDB;
 use super::domain::*;
 
 /// Wallet repository - handles all database operations
 #[derive(Clone)]
 pub struct WalletRepository {
+    client: Client,
     wallets: Collection<Wallet>,
     transactions: Collection<Transaction>,
     withdrawal_requests: Collection<WithdrawalRequest>,
@@ -24,16 +26,18 @@ pub struct WalletRepository {
 }
 
 impl WalletRepository {
-    pub fn new(db: &Database) -> Self {
+    pub fn new(db: Arc<MongoDB>) -> Self {
+        let database = db.database();
         Self {
-            wallets: db.collection("wallets"),
-            transactions: db.collection("wallet_transactions"),
-            withdrawal_requests: db.collection("withdrawal_requests"),
-            deposit_requests: db.collection("deposit_requests"),
-            escrow_holds: db.collection("escrow_holds"),
-            monthly_snapshots: db.collection("monthly_snapshots"),
-            admin_operation_logs: db.collection("admin_operation_logs"),
-            shop_commission_configs: db.collection("shop_commission_configs"),
+            client: database.client().clone(),
+            wallets: database.collection("wallets"),
+            transactions: database.collection("wallet_transactions"),
+            withdrawal_requests: database.collection("withdrawal_requests"),
+            deposit_requests: database.collection("deposit_requests"),
+            escrow_holds: database.collection("escrow_holds"),
+            monthly_snapshots: database.collection("monthly_snapshots"),
+            admin_operation_logs: database.collection("admin_operation_logs"),
+            shop_commission_configs: database.collection("shop_commission_configs"),
         }
     }
 
@@ -43,14 +47,14 @@ impl WalletRepository {
 
     /// Create new wallet
     pub async fn create_wallet(&self, wallet: Wallet) -> Result<Wallet, DbError> {
-        self.wallets.insert_one(&wallet, None).await?;
+        self.wallets.insert_one(&wallet).await?;
         Ok(wallet)
     }
 
     /// Find wallet by wallet_id
     pub async fn find_wallet_by_id(&self, wallet_id: &str) -> Result<Option<Wallet>, DbError> {
         self.wallets
-            .find_one(doc! { "wallet_id": wallet_id }, None)
+            .find_one(doc! { "wallet_id": wallet_id })
             .await
             .map_err(DbError::from)
     }
@@ -58,7 +62,7 @@ impl WalletRepository {
     /// Find wallet by user_id
     pub async fn find_wallet_by_user_id(&self, user_id: &str) -> Result<Option<Wallet>, DbError> {
         self.wallets
-            .find_one(doc! { "user_id": user_id }, None)
+            .find_one(doc! { "user_id": user_id })
             .await
             .map_err(DbError::from)
     }
@@ -72,7 +76,6 @@ impl WalletRepository {
             .replace_one(
                 doc! { "wallet_id": &wallet.wallet_id },
                 &update_wallet,
-                None,
             )
             .await?;
         Ok(())
@@ -85,7 +88,8 @@ impl WalletRepository {
         session: &mut ClientSession,
     ) -> Result<Option<Wallet>, DbError> {
         self.wallets
-            .find_one_with_session(doc! { "user_id": user_id }, None, session)
+            .find_one(doc! { "user_id": user_id })
+            .session(&mut *session)
             .await
             .map_err(DbError::from)
     }
@@ -100,12 +104,8 @@ impl WalletRepository {
         update_wallet.updated_at = BsonDateTime::now();
 
         self.wallets
-            .replace_one_with_session(
-                doc! { "wallet_id": &wallet.wallet_id },
-                &update_wallet,
-                None,
-                session,
-            )
+            .replace_one(doc! { "wallet_id": &wallet.wallet_id }, &update_wallet)
+            .session(&mut *session)
             .await?;
         Ok(())
     }
@@ -113,7 +113,7 @@ impl WalletRepository {
     /// Get platform wallet
     pub async fn get_platform_wallet(&self) -> Result<Wallet, DbError> {
         self.wallets
-            .find_one(doc! { "user_id": "PLATFORM" }, None)
+            .find_one(doc! { "user_id": "PLATFORM" })
             .await?
             .ok_or_else(|| DbError::NotFound("Platform wallet not found".to_string()))
     }
@@ -124,9 +124,23 @@ impl WalletRepository {
         session: &mut ClientSession,
     ) -> Result<Wallet, DbError> {
         self.wallets
-            .find_one_with_session(doc! { "user_id": "PLATFORM" }, None, session)
+            .find_one(doc! { "user_id": "PLATFORM" })
+            .session(&mut *session)
             .await?
             .ok_or_else(|| DbError::NotFound("Platform wallet not found".to_string()))
+    }
+
+    /// Alias for get_platform_wallet - for compatibility
+    pub async fn find_platform_wallet(&self) -> Result<Wallet, DbError> {
+        self.get_platform_wallet().await
+    }
+
+    /// Start a new MongoDB session for transactions
+    pub async fn start_session(&self) -> Result<ClientSession, DbError> {
+        self.client
+            .start_session()
+            .await
+            .map_err(|e| DbError::ConnectionError(format!("Failed to start session: {}", e)))
     }
 
     // ========================================================================
@@ -135,7 +149,7 @@ impl WalletRepository {
 
     /// Create transaction
     pub async fn create_transaction(&self, tx: Transaction) -> Result<Transaction, DbError> {
-        self.transactions.insert_one(&tx, None).await?;
+        self.transactions.insert_one(&tx).await?;
         Ok(tx)
     }
 
@@ -146,7 +160,8 @@ impl WalletRepository {
         session: &mut ClientSession,
     ) -> Result<Transaction, DbError> {
         self.transactions
-            .insert_one_with_session(&tx, None, session)
+            .insert_one(&tx)
+            .session(&mut *session)
             .await?;
         Ok(tx)
     }
@@ -169,13 +184,12 @@ impl WalletRepository {
             });
         }
 
-        let options = FindOptions::builder()
+        let cursor = self.transactions
+            .find(filter)
             .sort(doc! { "created_at": -1 })
             .limit(limit)
             .skip(skip as u64)
-            .build();
-
-        let cursor = self.transactions.find(filter, options).await?;
+            .await?;
         let transactions: Vec<Transaction> = cursor.try_collect().await?;
         Ok(transactions)
     }
@@ -184,7 +198,7 @@ impl WalletRepository {
     pub async fn count_transactions_by_wallet(&self, wallet_id: &str) -> Result<i64, DbError> {
         let count = self
             .transactions
-            .count_documents(doc! { "wallet_id": wallet_id }, None)
+            .count_documents(doc! { "wallet_id": wallet_id })
             .await? as i64;
         Ok(count)
     }
@@ -201,7 +215,7 @@ impl WalletRepository {
             "status": "COMPLETED"
         };
 
-        let cursor = self.transactions.find(filter, None).await?;
+        let cursor = self.transactions.find(filter).await?;
         let transactions: Vec<Transaction> = cursor.try_collect().await?;
         Ok(transactions)
     }
@@ -215,7 +229,7 @@ impl WalletRepository {
         &self,
         req: WithdrawalRequest,
     ) -> Result<WithdrawalRequest, DbError> {
-        self.withdrawal_requests.insert_one(&req, None).await?;
+        self.withdrawal_requests.insert_one(&req).await?;
         Ok(req)
     }
 
@@ -225,7 +239,7 @@ impl WalletRepository {
         request_id: &str,
     ) -> Result<Option<WithdrawalRequest>, DbError> {
         self.withdrawal_requests
-            .find_one(doc! { "request_id": request_id }, None)
+            .find_one(doc! { "request_id": request_id })
             .await
             .map_err(DbError::from)
     }
@@ -236,7 +250,7 @@ impl WalletRepository {
         update_req.updated_at = BsonDateTime::now();
 
         self.withdrawal_requests
-            .replace_one(doc! { "request_id": &req.request_id }, &update_req, None)
+            .replace_one(doc! { "request_id": &req.request_id }, &update_req)
             .await?;
         Ok(())
     }
@@ -247,12 +261,12 @@ impl WalletRepository {
         limit: i64,
     ) -> Result<Vec<WithdrawalRequest>, DbError> {
         let filter = doc! { "status": "AWAITING_APPROVAL" };
-        let options = FindOptions::builder()
+
+        let cursor = self.withdrawal_requests
+            .find(filter)
             .sort(doc! { "created_at": -1 })
             .limit(limit)
-            .build();
-
-        let cursor = self.withdrawal_requests.find(filter, options).await?;
+            .await?;
         let requests: Vec<WithdrawalRequest> = cursor.try_collect().await?;
         Ok(requests)
     }
@@ -274,7 +288,6 @@ impl WalletRepository {
                     "created_at": { "$gte": today_start_bson },
                     "status": { "$in": ["COMPLETED", "PROCESSING", "APPROVED"] }
                 },
-                None,
             )
             .await? as i64;
         Ok(count)
@@ -289,7 +302,7 @@ impl WalletRepository {
         &self,
         req: DepositRequest,
     ) -> Result<DepositRequest, DbError> {
-        self.deposit_requests.insert_one(&req, None).await?;
+        self.deposit_requests.insert_one(&req).await?;
         Ok(req)
     }
 
@@ -299,7 +312,7 @@ impl WalletRepository {
         deposit_id: &str,
     ) -> Result<Option<DepositRequest>, DbError> {
         self.deposit_requests
-            .find_one(doc! { "deposit_id": deposit_id }, None)
+            .find_one(doc! { "deposit_id": deposit_id })
             .await
             .map_err(DbError::from)
     }
@@ -310,7 +323,7 @@ impl WalletRepository {
         gateway_ref: &str,
     ) -> Result<Option<DepositRequest>, DbError> {
         self.deposit_requests
-            .find_one(doc! { "payment_gateway_ref": gateway_ref }, None)
+            .find_one(doc! { "payment_gateway_ref": gateway_ref })
             .await
             .map_err(DbError::from)
     }
@@ -321,7 +334,7 @@ impl WalletRepository {
         update_req.updated_at = BsonDateTime::now();
 
         self.deposit_requests
-            .replace_one(doc! { "deposit_id": &req.deposit_id }, &update_req, None)
+            .replace_one(doc! { "deposit_id": &req.deposit_id }, &update_req)
             .await?;
         Ok(())
     }
@@ -332,7 +345,7 @@ impl WalletRepository {
 
     /// Create escrow hold
     pub async fn create_escrow_hold(&self, escrow: EscrowHold) -> Result<EscrowHold, DbError> {
-        self.escrow_holds.insert_one(&escrow, None).await?;
+        self.escrow_holds.insert_one(&escrow).await?;
         Ok(escrow)
     }
 
@@ -343,7 +356,8 @@ impl WalletRepository {
         session: &mut ClientSession,
     ) -> Result<EscrowHold, DbError> {
         self.escrow_holds
-            .insert_one_with_session(&escrow, None, session)
+            .insert_one(&escrow)
+            .session(&mut *session)
             .await?;
         Ok(escrow)
     }
@@ -354,7 +368,31 @@ impl WalletRepository {
         order_id: &str,
     ) -> Result<Option<EscrowHold>, DbError> {
         self.escrow_holds
-            .find_one(doc! { "order_id": order_id }, None)
+            .find_one(doc! { "order_id": order_id })
+            .await
+            .map_err(DbError::from)
+    }
+
+    /// Find escrow by escrow_id
+    pub async fn find_escrow_by_id(
+        &self,
+        escrow_id: &str,
+    ) -> Result<Option<EscrowHold>, DbError> {
+        self.escrow_holds
+            .find_one(doc! { "escrow_id": escrow_id })
+            .await
+            .map_err(DbError::from)
+    }
+
+    /// Find escrow by escrow_id with session
+    pub async fn find_escrow_by_id_with_session(
+        &self,
+        escrow_id: &str,
+        session: &mut ClientSession,
+    ) -> Result<Option<EscrowHold>, DbError> {
+        self.escrow_holds
+            .find_one(doc! { "escrow_id": escrow_id })
+            .session(&mut *session)
             .await
             .map_err(DbError::from)
     }
@@ -367,7 +405,7 @@ impl WalletRepository {
             "release_at": { "$lte": now }
         };
 
-        let cursor = self.escrow_holds.find(filter, None).await?;
+        let cursor = self.escrow_holds.find(filter).await?;
         let escrows: Vec<EscrowHold> = cursor.try_collect().await?;
         Ok(escrows)
     }
@@ -381,10 +419,14 @@ impl WalletRepository {
             .replace_one(
                 doc! { "escrow_id": &escrow.escrow_id },
                 &update_escrow,
-                None,
             )
             .await?;
         Ok(())
+    }
+
+    /// Alias for update_escrow_hold - for compatibility
+    pub async fn update_escrow(&self, escrow: &EscrowHold) -> Result<(), DbError> {
+        self.update_escrow_hold(escrow).await
     }
 
     /// Update escrow hold with session
@@ -397,12 +439,8 @@ impl WalletRepository {
         update_escrow.updated_at = BsonDateTime::now();
 
         self.escrow_holds
-            .replace_one_with_session(
-                doc! { "escrow_id": &escrow.escrow_id },
-                &update_escrow,
-                None,
-                session,
-            )
+            .replace_one(doc! { "escrow_id": &escrow.escrow_id }, &update_escrow)
+            .session(&mut *session)
             .await?;
         Ok(())
     }
@@ -414,7 +452,7 @@ impl WalletRepository {
             doc! { "$group": { "_id": null, "total": { "$sum": "$amount" } } },
         ];
 
-        let mut cursor = self.escrow_holds.aggregate(pipeline, None).await?;
+        let mut cursor = self.escrow_holds.aggregate(pipeline).await?;
         if let Some(result) = cursor.try_next().await? {
             Ok(result.get_i64("total").unwrap_or(0))
         } else {
@@ -431,7 +469,7 @@ impl WalletRepository {
         &self,
         snapshot: MonthlySnapshot,
     ) -> Result<MonthlySnapshot, DbError> {
-        self.monthly_snapshots.insert_one(&snapshot, None).await?;
+        self.monthly_snapshots.insert_one(&snapshot).await?;
         Ok(snapshot)
     }
 
@@ -447,7 +485,6 @@ impl WalletRepository {
                     "wallet_id": wallet_id,
                     "month": month
                 },
-                None,
             )
             .await
             .map_err(DbError::from)
@@ -458,18 +495,14 @@ impl WalletRepository {
         &self,
         wallet_id: &str,
     ) -> Result<Option<MonthlySnapshot>, DbError> {
-        let options = FindOneOptions::builder()
-            .sort(doc! { "month": -1 })
-            .build();
-
         self.monthly_snapshots
             .find_one(
                 doc! {
                     "wallet_id": wallet_id,
                     "status": "VERIFIED"
                 },
-                options,
             )
+            .sort(doc! { "month": -1 })
             .await
             .map_err(DbError::from)
     }
@@ -493,12 +526,9 @@ impl WalletRepository {
             ]
         };
 
-        let options = FindOneOptions::builder()
-            .sort(doc! { "effective_from": -1 })
-            .build();
-
         self.shop_commission_configs
-            .find_one(filter, options)
+            .find_one(filter)
+            .sort(doc! { "effective_from": -1 })
             .await
             .map_err(DbError::from)
     }
@@ -509,7 +539,7 @@ impl WalletRepository {
         config: ShopCommissionConfig,
     ) -> Result<ShopCommissionConfig, DbError> {
         self.shop_commission_configs
-            .insert_one(&config, None)
+            .insert_one(&config)
             .await?;
         Ok(config)
     }
@@ -526,7 +556,6 @@ impl WalletRepository {
                 doc! {
                     "$set": { "effective_to": now }
                 },
-                None,
             )
             .await?;
         Ok(())
@@ -541,7 +570,7 @@ impl WalletRepository {
         &self,
         log: AdminOperationLog,
     ) -> Result<AdminOperationLog, DbError> {
-        self.admin_operation_logs.insert_one(&log, None).await?;
+        self.admin_operation_logs.insert_one(&log).await?;
         Ok(log)
     }
 
@@ -551,16 +580,54 @@ impl WalletRepository {
         target_id: &str,
         limit: i64,
     ) -> Result<Vec<AdminOperationLog>, DbError> {
-        let options = FindOptions::builder()
-            .sort(doc! { "created_at": -1 })
-            .limit(limit)
-            .build();
-
         let cursor = self
             .admin_operation_logs
-            .find(doc! { "target_id": target_id }, options)
+            .find(doc! { "target_id": target_id })
+            .sort(doc! { "created_at": -1 })
+            .limit(limit)
             .await?;
         let logs: Vec<AdminOperationLog> = cursor.try_collect().await?;
         Ok(logs)
+    }
+
+    /// Get recent admin logs
+    pub async fn get_recent_admin_logs(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<AdminOperationLog>, DbError> {
+        let cursor = self
+            .admin_operation_logs
+            .find(doc! {})
+            .sort(doc! { "created_at": -1 })
+            .limit(limit)
+            .await?;
+        let logs: Vec<AdminOperationLog> = cursor.try_collect().await?;
+        Ok(logs)
+    }
+
+    /// Create admin log with session
+    pub async fn create_admin_log_with_session(
+        &self,
+        log: AdminOperationLog,
+        session: &mut ClientSession,
+    ) -> Result<AdminOperationLog, DbError> {
+        self.admin_operation_logs.insert_one(&log).session(&mut *session).await?;
+        Ok(log)
+    }
+
+    /// Update withdrawal with session
+    pub async fn update_withdrawal_with_session(
+        &self,
+        withdrawal: &WithdrawalRequest,
+        session: &mut ClientSession,
+    ) -> Result<(), DbError> {
+        let mut updated = withdrawal.clone();
+        updated.updated_at = BsonDateTime::now();
+
+        self.withdrawal_requests
+            .replace_one(doc! { "request_id": &withdrawal.request_id }, &updated)
+            .session(&mut *session)
+            .await?;
+        Ok(())
     }
 }

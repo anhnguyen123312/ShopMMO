@@ -212,6 +212,9 @@ pub enum DbError {
 
     #[error("Connection error: {0}")]
     ConnectionError(String),
+
+    #[error("Resource not found: {0}")]
+    NotFound(String),
 }
 
 /// Convert MongoDB errors

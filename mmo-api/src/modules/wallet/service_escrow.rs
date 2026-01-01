@@ -42,8 +42,7 @@ impl WalletService {
         let mut platform_wallet = self
             .repo
             .find_platform_wallet()
-            .await?
-            .ok_or_else(|| ServiceError::NotFound("Platform wallet not found".to_string()))?;
+            .await?;
 
         // Get seller wallet to determine commission rate
         let seller_wallet = self
@@ -67,27 +66,23 @@ impl WalletService {
             id: None,
             escrow_id: escrow_id.clone(),
             order_id: req.order_id.clone(),
-            buyer_wallet_id: buyer_wallet.wallet_id.clone(),
-            buyer_user_id: buyer_wallet.user_id.clone(),
-            seller_wallet_id: seller_wallet.wallet_id.clone(),
-            seller_user_id: seller_wallet.user_id.clone(),
-            product_id: req.product_id.clone(),
-            product_name: req.product_name.clone(),
-            trust_amount: req.trust_amount,
-            commission_rate,
-            commission_amount,
+            buyer_id: buyer_wallet.user_id.clone(),
+            seller_id: seller_wallet.user_id.clone(),
+            amount: req.trust_amount,
             status: EscrowStatus::Holding,
-            auto_release_at: release_at,
+            release_at,
             released_at: None,
-            release_type: None,
-            dispute_reason: None,
+            early_release: false,
+            early_release_by: None,
+            commission_amount: Some(commission_amount),
             created_at: now,
             updated_at: now,
         };
 
         // Use MongoDB transaction
         let mut session = self.repo.start_session().await?;
-        session.start_transaction(None).await?;
+        session.start_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to start transaction: {}", e)))?;
 
         // 1. Deduct from buyer: available -> spent
         let buyer_balance_before = buyer_wallet.available_trust;
@@ -144,20 +139,19 @@ impl WalletService {
             .update_wallet_with_session(&platform_wallet, &mut session)
             .await?;
         self.repo
-            .create_escrow_with_session(escrow, &mut session)
+            .create_escrow_hold_with_session(escrow, &mut session)
             .await?;
 
-        session.commit_transaction().await?;
+        session.commit_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to commit transaction: {}", e)))?;
 
         Ok(PurchaseResponse {
             escrow_id,
             order_id: req.order_id,
             buyer_wallet_id: buyer_wallet.wallet_id,
-            seller_wallet_id: seller_wallet.wallet_id,
-            trust_amount: req.trust_amount,
-            commission_amount,
-            status: EscrowStatus::Holding,
-            auto_release_at: release_at.to_string(),
+            seller_id: seller_wallet.user_id,
+            amount: req.trust_amount,
+            release_at: release_at.to_string(),
             created_at: now.to_string(),
         })
     }
@@ -188,7 +182,7 @@ impl WalletService {
             .await?
             .ok_or_else(|| ServiceError::NotFound("Escrow not found".to_string()))?;
 
-        if escrow.buyer_user_id != buyer_user_id {
+        if escrow.buyer_id != buyer_user_id {
             return Err(ServiceError::Unauthorized(
                 "Not authorized to release this escrow".to_string(),
             ));
@@ -223,28 +217,28 @@ impl WalletService {
         let mut platform_wallet = self
             .repo
             .find_platform_wallet()
-            .await?
-            .ok_or_else(|| ServiceError::NotFound("Platform wallet not found".to_string()))?;
+            .await?;
 
         let mut seller_wallet = self
             .repo
-            .find_wallet_by_id(&escrow.seller_wallet_id)
+            .find_wallet_by_user_id(&escrow.seller_id)
             .await?
             .ok_or_else(|| ServiceError::NotFound("Seller wallet not found".to_string()))?;
 
-        // Calculate amounts
-        let net_to_seller = escrow.trust_amount - escrow.commission_amount;
+        let commission_amount = escrow.commission_amount.unwrap_or(0);
+        let net_to_seller = escrow.amount - commission_amount;
 
         // Use MongoDB transaction
         let mut session = self.repo.start_session().await?;
-        session.start_transaction(None).await?;
+        session.start_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to start transaction: {}", e)))?;
 
         let now = BsonDateTime::now();
 
         // 1. Deduct from platform wallet
         let platform_balance_before = platform_wallet.available_trust;
-        platform_wallet.available_trust -= escrow.trust_amount;
-        platform_wallet.total_trust -= escrow.trust_amount;
+        platform_wallet.available_trust -= escrow.amount;
+        platform_wallet.total_trust -= escrow.amount;
         Self::validate_invariant(&platform_wallet)?;
 
         let platform_tx_id = Self::generate_id("TXN");
@@ -254,7 +248,7 @@ impl WalletService {
             platform_wallet.user_id.clone(),
             TransactionType::EscrowRelease,
             Direction::Debit,
-            escrow.trust_amount,
+            escrow.amount,
             platform_balance_before,
             platform_wallet.available_trust,
             BalanceType::Available,
@@ -268,7 +262,7 @@ impl WalletService {
         seller_wallet.lifetime_received += net_to_seller;
 
         // 3. Add commission to seller's debt
-        seller_wallet.commission_debt += escrow.commission_amount;
+        seller_wallet.commission_debt += commission_amount;
 
         Self::validate_invariant(&seller_wallet)?;
 
@@ -289,7 +283,6 @@ impl WalletService {
         // 4. Update escrow status
         escrow.status = EscrowStatus::Released;
         escrow.released_at = Some(now);
-        escrow.release_type = Some(release_type);
         escrow.updated_at = now;
 
         // Save to database
@@ -306,14 +299,15 @@ impl WalletService {
             .update_wallet_with_session(&seller_wallet, &mut session)
             .await?;
         self.repo
-            .update_escrow_with_session(&escrow, &mut session)
+            .update_escrow_hold_with_session(&escrow, &mut session)
             .await?;
 
-        session.commit_transaction().await?;
+        session.commit_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to commit transaction: {}", e)))?;
 
         Ok(SuccessResponse::new(format!(
             "Escrow {} released to seller. Net: {} Trust, Commission: {} Trust",
-            escrow_id, net_to_seller, escrow.commission_amount
+            escrow_id, net_to_seller, commission_amount
         )))
     }
 
@@ -336,7 +330,7 @@ impl WalletService {
             .ok_or_else(|| ServiceError::NotFound("Escrow not found".to_string()))?;
 
         // Verify user is buyer or seller
-        if escrow.buyer_user_id != user_id && escrow.seller_user_id != user_id {
+        if escrow.buyer_id != user_id && escrow.seller_id != user_id {
             return Err(ServiceError::Unauthorized(
                 "Not authorized to dispute this escrow".to_string(),
             ));
@@ -351,7 +345,8 @@ impl WalletService {
 
         // Update escrow to disputed
         escrow.status = EscrowStatus::Disputed;
-        escrow.dispute_reason = Some(req.reason);
+        // Note: dispute_reason is not stored in EscrowHold struct
+        // Could be stored in a separate dispute record if needed
         escrow.updated_at = BsonDateTime::now();
 
         self.repo.update_escrow(&escrow).await?;
@@ -386,25 +381,25 @@ impl WalletService {
         let mut platform_wallet = self
             .repo
             .find_platform_wallet()
-            .await?
-            .ok_or_else(|| ServiceError::NotFound("Platform wallet not found".to_string()))?;
+            .await?;
 
         let mut buyer_wallet = self
             .repo
-            .find_wallet_by_id(&escrow.buyer_wallet_id)
+            .find_wallet_by_user_id(&escrow.buyer_id)
             .await?
             .ok_or_else(|| ServiceError::NotFound("Buyer wallet not found".to_string()))?;
 
         // Use MongoDB transaction
         let mut session = self.repo.start_session().await?;
-        session.start_transaction(None).await?;
+        session.start_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to start transaction: {}", e)))?;
 
         let now = BsonDateTime::now();
 
         // 1. Deduct from platform
         let platform_balance_before = platform_wallet.available_trust;
-        platform_wallet.available_trust -= escrow.trust_amount;
-        platform_wallet.total_trust -= escrow.trust_amount;
+        platform_wallet.available_trust -= escrow.amount;
+        platform_wallet.total_trust -= escrow.amount;
         Self::validate_invariant(&platform_wallet)?;
 
         let platform_tx_id = Self::generate_id("TXN");
@@ -414,7 +409,7 @@ impl WalletService {
             platform_wallet.user_id.clone(),
             TransactionType::DisputeRefund,
             Direction::Debit,
-            escrow.trust_amount,
+            escrow.amount,
             platform_balance_before,
             platform_wallet.available_trust,
             BalanceType::Available,
@@ -423,19 +418,19 @@ impl WalletService {
 
         // 2. Refund to buyer (reverse the spent)
         let buyer_balance_before = buyer_wallet.available_trust;
-        buyer_wallet.available_trust += escrow.trust_amount;
-        buyer_wallet.total_trust += escrow.trust_amount;
-        buyer_wallet.lifetime_spent -= escrow.trust_amount; // Reverse
+        buyer_wallet.available_trust += escrow.amount;
+        buyer_wallet.total_trust += escrow.amount;
+        buyer_wallet.lifetime_spent -= escrow.amount; // Reverse
         Self::validate_invariant(&buyer_wallet)?;
 
         let buyer_tx_id = Self::generate_id("TXN");
         let buyer_tx = Transaction::new(
-            buyer_tx_id,
+            buyer_tx_id.clone(),
             buyer_wallet.wallet_id.clone(),
             buyer_wallet.user_id.clone(),
             TransactionType::DisputeRefund,
             Direction::Credit,
-            escrow.trust_amount,
+            escrow.amount,
             buyer_balance_before,
             buyer_wallet.available_trust,
             BalanceType::Available,
@@ -445,7 +440,6 @@ impl WalletService {
         // 3. Update escrow
         escrow.status = EscrowStatus::Refunded;
         escrow.released_at = Some(now);
-        escrow.release_type = Some(ReleaseType::DisputeRefund);
         escrow.updated_at = now;
 
         // Save to database
@@ -462,7 +456,7 @@ impl WalletService {
             .update_wallet_with_session(&buyer_wallet, &mut session)
             .await?;
         self.repo
-            .update_escrow_with_session(&escrow, &mut session)
+            .update_escrow_hold_with_session(&escrow, &mut session)
             .await?;
 
         // Create admin log
@@ -477,7 +471,7 @@ impl WalletService {
             target_id: escrow.escrow_id.clone(),
             before_state: serde_json::json!({"status": "DISPUTED"}),
             after_state: serde_json::json!({"status": "REFUNDED"}),
-            amount: Some(escrow.trust_amount),
+            amount: Some(escrow.amount),
             reason,
             note: None,
             transaction_id: Some(buyer_tx_id),
@@ -489,11 +483,12 @@ impl WalletService {
             .create_admin_log_with_session(log, &mut session)
             .await?;
 
-        session.commit_transaction().await?;
+        session.commit_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to commit transaction: {}", e)))?;
 
         Ok(SuccessResponse::new(format!(
             "Dispute resolved with refund. {} Trust returned to buyer.",
-            escrow.trust_amount
+            escrow.amount
         )))
     }
 
@@ -537,7 +532,7 @@ impl WalletService {
             target_id: escrow.escrow_id.clone(),
             before_state: serde_json::json!({"status": "DISPUTED"}),
             after_state: serde_json::json!({"status": "RELEASED"}),
-            amount: Some(escrow.trust_amount),
+            amount: Some(escrow.amount),
             reason,
             note: None,
             transaction_id: None,
@@ -559,7 +554,7 @@ impl WalletService {
     /// Process auto-release for all escrows past their hold period
     pub async fn process_auto_releases(&self) -> Result<ProcessAutoReleaseResponse, ServiceError> {
         let now = BsonDateTime::now();
-        let escrows = self.repo.find_escrows_ready_for_release(now).await?;
+        let escrows = self.repo.find_escrows_ready_for_release().await?;
 
         let mut released_count = 0;
         let mut failed_count = 0;

@@ -40,7 +40,7 @@ impl RedisDB {
 
         // Verify connection with ping
         redis::cmd("PING")
-            .query_async::<_, String>(&mut connection_manager.clone())
+            .query_async::<String>(&mut connection_manager.clone())
             .await?;
 
         tracing::info!("Successfully connected to Redis");

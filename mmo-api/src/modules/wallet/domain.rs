@@ -210,13 +210,17 @@ pub enum TransactionType {
     WithdrawalCancelled,
 
     // === Purchase/Order ===
+    Purchase,
     PurchaseDebit,
+    PurchaseEscrow,
     EscrowHold,
     EscrowRelease,
+    EscrowReceive,
 
     // === Refund ===
     RefundEscrow,
     RefundSeller,
+    DisputeRefund,
 
     // === Commission ===
     CommissionAccrue,
@@ -226,6 +230,7 @@ pub enum TransactionType {
     // === Admin Operations ===
     AdminCredit,
     AdminDebit,
+    DebitManual,
     AdminAdjustment,
     AdminFreeze,
     AdminUnfreeze,
@@ -548,6 +553,17 @@ pub enum EscrowStatus {
     CancelledBySeller,
 }
 
+/// Release type for escrow
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ReleaseType {
+    Auto,
+    EarlyRelease,
+    DisputeRelease,
+    DisputeRefund,
+    AdminForce,
+}
+
 // ============================================================================
 // ADMIN OPERATION LOG
 // ============================================================================
@@ -622,6 +638,7 @@ pub enum TargetType {
     User,
     Shop,
     Withdrawal,
+    Escrow,
     Order,
 }
 

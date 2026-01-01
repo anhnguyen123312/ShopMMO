@@ -60,6 +60,7 @@ pub struct TokenClaims {
 /// ```
 pub fn generate_access_token(
     user_id: &str,
+    wallet_id: &str,
     email: &str,
     role: &str,
     secret: &str,
@@ -70,6 +71,7 @@ pub fn generate_access_token(
 
     let claims = TokenClaims {
         sub: user_id.to_string(),
+        wallet_id: wallet_id.to_string(),
         email: email.to_string(),
         role: role.to_string(),
         iat: now.timestamp(),
@@ -109,6 +111,7 @@ pub fn generate_access_token(
 /// ```
 pub fn generate_refresh_token(
     user_id: &str,
+    wallet_id: &str,
     email: &str,
     role: &str,
     secret: &str,
@@ -119,6 +122,7 @@ pub fn generate_refresh_token(
 
     let claims = TokenClaims {
         sub: user_id.to_string(),
+        wallet_id: wallet_id.to_string(),
         email: email.to_string(),
         role: role.to_string(),
         iat: now.timestamp(),
@@ -205,6 +209,7 @@ mod tests {
     fn test_generate_and_verify_access_token() {
         let token = generate_access_token(
             "507f1f77bcf86cd799439011",
+            "WLT-507f1f77bcf86cd799439011",
             "test@example.com",
             "user",
             TEST_SECRET,
@@ -214,6 +219,7 @@ mod tests {
 
         let claims = verify_token(&token, TEST_SECRET).unwrap();
         assert_eq!(claims.sub, "507f1f77bcf86cd799439011");
+        assert_eq!(claims.wallet_id, "WLT-507f1f77bcf86cd799439011");
         assert_eq!(claims.email, "test@example.com");
         assert_eq!(claims.role, "user");
         assert_eq!(claims.token_type, "access");

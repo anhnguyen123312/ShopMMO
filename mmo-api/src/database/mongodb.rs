@@ -65,7 +65,7 @@ impl MongoDB {
         // Verify connection with ping
         client
             .database("admin")
-            .run_command(mongodb::bson::doc! { "ping": 1 }, None)
+            .run_command(mongodb::bson::doc! { "ping": 1 })
             .await?;
 
         tracing::info!("Successfully connected to MongoDB");
@@ -112,7 +112,7 @@ impl MongoDB {
     pub async fn start_session(
         &self,
     ) -> Result<mongodb::ClientSession, mongodb::error::Error> {
-        self.client.start_session(None).await
+        self.client.start_session().await
     }
 
     /// Checks database health
@@ -129,7 +129,7 @@ impl MongoDB {
     pub async fn health_check(&self) -> Result<bool, mongodb::error::Error> {
         self.client
             .database("admin")
-            .run_command(mongodb::bson::doc! { "ping": 1 }, None)
+            .run_command(mongodb::bson::doc! { "ping": 1 })
             .await?;
         Ok(true)
     }

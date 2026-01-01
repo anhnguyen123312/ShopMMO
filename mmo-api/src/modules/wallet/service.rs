@@ -9,7 +9,8 @@ use std::sync::Arc;
 use ulid::Ulid;
 
 use crate::core::error::ServiceError;
-use super::{dto::*, repository::WalletRepository, domain::*};
+use super::{repository::WalletRepository, domain::*};
+use super::dto::{self, *};
 
 const VND_TO_TRUST_RATE: i64 = 1000;
 const DEFAULT_COMMISSION_RATE: f64 = 0.05; // 5%
@@ -231,7 +232,7 @@ impl WalletService {
     pub async fn create_withdrawal(
         &self,
         wallet_id: &str,
-        req: WithdrawalRequest,
+        req: dto::WithdrawalRequest,
     ) -> Result<WithdrawalResponse, ServiceError> {
         // Get wallet
         let mut wallet = self

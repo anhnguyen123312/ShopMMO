@@ -96,7 +96,7 @@ pub struct WalletInfoResponse {
 pub struct AutoDepositRequest {
     /// VND amount (must be divisible by 1000)
     #[validate(range(min = 10000, max = 50000000, message = "Amount must be between 10,000 and 50,000,000 VND"))]
-    #[validate(custom = "validate_divisible_by_1000")]
+    #[validate(custom(function = "validate_divisible_by_1000"))]
     pub vnd_amount: i64,
 
     /// Payment gateway: VNPay, MoMo, etc.
@@ -217,13 +217,16 @@ pub struct PurchaseRequest {
     pub order_id: String,
 
     #[validate(length(min = 1))]
+    pub seller_user_id: String,
+
+    #[validate(length(min = 1))]
     pub product_id: String,
 
-    #[validate(range(min = 1))]
-    pub quantity: i32,
+    #[validate(length(min = 1))]
+    pub product_name: String,
 
     #[validate(range(min = 1))]
-    pub price_per_unit: i64,
+    pub trust_amount: i64,
 }
 
 /// Purchase response
@@ -311,8 +314,9 @@ pub struct AdminDebitRequest {
     #[validate(length(min = 1))]
     pub user_id: String,
 
+    #[serde(alias = "amount")]
     #[validate(range(min = 1))]
-    pub amount: i64,
+    pub trust_amount: i64,
 
     #[validate(length(min = 10, max = 500))]
     pub reason: String,
@@ -373,9 +377,13 @@ pub struct SetCommissionRateRequest {
     #[validate(length(min = 1))]
     pub shop_id: String,
 
+    #[validate(length(min = 1))]
+    pub seller_user_id: String,
+
     /// Rate between 0.01 and 0.20 (1% to 20%)
+    #[serde(alias = "rate")]
     #[validate(range(min = 0.01, max = 0.20))]
-    pub rate: f64,
+    pub commission_rate: f64,
 
     #[validate(length(min = 10, max = 500))]
     pub reason: String,
@@ -545,7 +553,7 @@ pub struct PendingWithdrawalItem {
 // VALIDATION HELPERS
 // ============================================================================
 
-fn validate_divisible_by_1000(value: &i64) -> Result<(), validator::ValidationError> {
+fn validate_divisible_by_1000(value: i64) -> Result<(), validator::ValidationError> {
     if value % 1000 != 0 {
         return Err(validator::ValidationError::new("not_divisible_by_1000"));
     }
@@ -584,3 +592,82 @@ impl SuccessResponse {
         }
     }
 }
+
+// ============================================================================
+// ADDITIONAL DTOs FOR HANDLERS
+// ============================================================================
+
+/// Create wallet request
+#[derive(Debug, Deserialize)]
+pub struct CreateWalletRequest {
+    pub wallet_type: super::domain::WalletType,
+}
+
+/// Dispute request
+#[derive(Debug, Deserialize)]
+pub struct DisputeRequest {
+    pub reason: String,
+}
+
+/// Resolve dispute request
+#[derive(Debug, Deserialize)]
+pub struct ResolveDisputeRequest {
+    pub reason: String,
+}
+
+/// Manual debit request (alias for AdminDebitRequest)
+pub type ManualDebitRequest = AdminDebitRequest;
+
+/// Freeze wallet request (alias for AdminFreezeRequest)
+pub type FreezeWalletRequest = AdminFreezeRequest;
+
+/// Unfreeze wallet request (alias for AdminUnfreezeRequest)
+pub type UnfreezeWalletRequest = AdminUnfreezeRequest;
+
+/// Set shop commission request (alias for SetCommissionRateRequest)
+pub type SetShopCommissionRequest = SetCommissionRateRequest;
+
+/// Reject withdrawal request
+#[derive(Debug, Deserialize)]
+pub struct RejectWithdrawalRequest {
+    pub rejection_reason: String,
+}
+
+/// Complete bank transfer request
+#[derive(Debug, Deserialize)]
+pub struct CompleteBankTransferRequest {
+    pub bank_transfer_ref: String,
+}
+
+/// Admin log query
+#[derive(Debug, Deserialize)]
+pub struct AdminLogQuery {
+    pub target_id: Option<String>,
+    pub limit: Option<i64>,
+}
+
+/// Transaction history response
+#[derive(Debug, Serialize)]
+pub struct TransactionHistoryResponse {
+    pub wallet_id: String,
+    pub transactions: Vec<super::domain::Transaction>,
+    pub count: i64,
+}
+
+/// Admin log response
+#[derive(Debug, Serialize)]
+pub struct AdminLogResponse {
+    pub logs: Vec<super::domain::AdminOperationLog>,
+    pub count: i64,
+}
+
+/// Process auto-release response
+#[derive(Debug, Serialize)]
+pub struct ProcessAutoReleaseResponse {
+    pub total_processed: i32,
+    pub released_count: i32,
+    pub failed_count: i32,
+    pub released_ids: Vec<String>,
+    pub errors: Vec<String>,
+}
+

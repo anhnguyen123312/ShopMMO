@@ -34,7 +34,7 @@ impl UserRepository {
     /// # Returns
     /// * `Result<User, DbError>` - Created user with ID
     pub async fn create(&self, mut user: User) -> Result<User, DbError> {
-        let result = self.collection.insert_one(&user, None).await?;
+        let result = self.collection.insert_one(&user).await?;
         user.id = Some(result.inserted_id.as_object_id().unwrap());
         Ok(user)
     }
@@ -48,7 +48,7 @@ impl UserRepository {
     /// * `Result<Option<User>, DbError>` - User if found
     pub async fn find_by_email(&self, email: &str) -> Result<Option<User>, DbError> {
         self.collection
-            .find_one(doc! { "email": email }, None)
+            .find_one(doc! { "email": email })
             .await
             .map_err(DbError::from)
     }
@@ -62,7 +62,7 @@ impl UserRepository {
     /// * `Result<Option<User>, DbError>` - User if found
     pub async fn find_by_id(&self, id: &ObjectId) -> Result<Option<User>, DbError> {
         self.collection
-            .find_one(doc! { "_id": id }, None)
+            .find_one(doc! { "_id": id })
             .await
             .map_err(DbError::from)
     }
@@ -81,7 +81,6 @@ impl UserRepository {
                         "updated_at": DateTime::now()
                     }
                 },
-                None,
             )
             .await?;
         Ok(())
@@ -102,7 +101,6 @@ impl UserRepository {
                         "updated_at": DateTime::now()
                     }
                 },
-                None,
             )
             .await?;
         Ok(())
@@ -118,7 +116,7 @@ impl UserRepository {
     pub async fn email_exists(&self, email: &str) -> Result<bool, DbError> {
         let count = self
             .collection
-            .count_documents(doc! { "email": email }, None)
+            .count_documents(doc! { "email": email })
             .await?;
         Ok(count > 0)
     }
@@ -144,7 +142,7 @@ impl RefreshTokenRepository {
     /// # Arguments
     /// * `token` - Refresh token to create
     pub async fn create(&self, token: RefreshToken) -> Result<RefreshToken, DbError> {
-        self.collection.insert_one(&token, None).await?;
+        self.collection.insert_one(&token).await?;
         Ok(token)
     }
 
@@ -157,7 +155,7 @@ impl RefreshTokenRepository {
     /// * `Result<Option<RefreshToken>, DbError>` - Token if found
     pub async fn find_by_token(&self, token: &str) -> Result<Option<RefreshToken>, DbError> {
         self.collection
-            .find_one(doc! { "token": token, "revoked": false }, None)
+            .find_one(doc! { "token": token, "revoked": false })
             .await
             .map_err(DbError::from)
     }
@@ -171,7 +169,6 @@ impl RefreshTokenRepository {
             .update_one(
                 doc! { "token": token },
                 doc! { "$set": { "revoked": true } },
-                None,
             )
             .await?;
         Ok(())
@@ -186,7 +183,6 @@ impl RefreshTokenRepository {
             .update_many(
                 doc! { "user_id": user_id },
                 doc! { "$set": { "revoked": true } },
-                None,
             )
             .await?;
         Ok(())
@@ -197,7 +193,7 @@ impl RefreshTokenRepository {
         let now = DateTime::now();
         let result = self
             .collection
-            .delete_many(doc! { "expires_at": { "$lt": now } }, None)
+            .delete_many(doc! { "expires_at": { "$lt": now } })
             .await?;
         Ok(result.deleted_count)
     }

@@ -81,3 +81,5 @@ pub fn init_logger() {
 /// let _enter = span.enter();
 /// // ... code here will be associated with this span
 /// ```
+#[allow(dead_code)]
+const _LOGGER_USAGE_EXAMPLE: () = ();
