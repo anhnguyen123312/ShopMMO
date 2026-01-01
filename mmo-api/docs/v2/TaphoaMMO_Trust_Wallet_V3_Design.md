@@ -469,7 +469,7 @@ flowchart TD
     ShowForm --> UserInput[User nhap so tien<br/>VD: 100,000 VND]
     
     %% Validation
-    UserInput --> Validate{Validate}
+    UserInput --> Validate<Validate>
     Validate -->|FAIL| Error[ Loi:<br/>- Min 10,000 VND<br/>- Max 50,000,000 VND<br/>- Chia het cho 1,000]
     Validate -->|PASS| CalcTrust[Tinh Trust<br/>100,000 / 1,000 = 100 Trust]
     
@@ -553,7 +553,7 @@ flowchart TD
     %% Validation Failed
     ValidationResult -->|FAILED| HandleFailed[Update Request<br/>Status: VALIDATION_FAILED]
     HandleFailed --> UnlockFunds1[Unlock funds<br/>withdrawal_locked - available]
-    UnlockFunds1 --> NotifyFailed[Notify user<br/>Tu choi: {reason}]
+    UnlockFunds1 --> NotifyFailed[Notify user<br/>Tu choi: <reason>]
     
     %% Validation Needs Review
     ValidationResult -->|REVIEW| HandleReview[Update Request<br/>Status: AWAITING_APPROVAL]
@@ -676,7 +676,7 @@ flowchart TD
     ValidateInvariant -->|FAIL| Rollback[ ROLLBACK]
     ValidateInvariant -->|PASS| Commit[ COMMIT]
     
-    Commit --> NotifySeller[Notify Seller<br/>Nhan {seller_receives} Trust]
+    Commit --> NotifySeller[Notify Seller<br/>Nhan <seller_receives> Trust]
     NotifySeller --> HasMore{Con escrow?}
     HasMore -->|Yes| Loop
     HasMore -->|No| End([Done])
@@ -805,7 +805,7 @@ flowchart TD
     SelectUser --> ShowForm[Form nhap:<br/>- So Trust<br/>- Ly do (bat buoc)<br/>- Ghi chu]
     
     %% Validation
-    ShowForm --> Validate{Validate}
+    ShowForm --> Validate<Validate>
     Validate -->|FAIL| Error[ Loi:<br/>- Trust > 0<br/>- Trust <= 1,000,000<br/>- Ly do >= 10 ky tu]
     Validate -->|PASS| CheckPerm{Admin co quyen<br/>WALLET_DEPOSIT?}
     CheckPerm -->|No| PermError[ Không co quyen]
@@ -851,7 +851,7 @@ flowchart TD
     ShowWallet --> ShowForm[Form nhap:<br/>- So Trust cần tru<br/>- Ly do (bat buoc)<br/>- Reference (order_id, etc)]
     
     %% Validation
-    ShowForm --> Validate{Validate}
+    ShowForm --> Validate<Validate>
     Validate -->|FAIL| Error[ Loi]
     Validate -->|PASS| CheckBalance{available >= amount?}
     CheckBalance -->|No| BalanceError[ So dư không du<br/>Chi co the tru: X Trust]
@@ -903,7 +903,7 @@ flowchart TD
     SelectShop --> ShowForm[Form:<br/>- Current rate: 5%<br/>- New rate: ____%<br/>- Effective from: ____<br/>- Effective to: ____ (optional)<br/>- Reason]
     
     %% Validation
-    ShowForm --> Validate{Validate}
+    ShowForm --> Validate<Validate>
     Validate -->|FAIL| Error[ Loi:<br/>- Rate: 1% - 20%<br/>- Effective from >= today]
     Validate -->|PASS| ShowImpact[Hien thi Impact:<br/>Shop co 100 orders/thang<br/>Thay doi commission tu 5% - 3%<br/>Giam thu: ~200,000 Trust/thang]
     
@@ -1282,7 +1282,7 @@ flowchart TD
     
     UpdateRequest --> CreateTx[Tao Transaction<br/>Type: WITHDRAWAL_REJECTED<br/>Reverse lock transaction]
     
-    CreateTx --> NotifyUser[Notify User<br/>Yêu cầu rut tien bi tu choi<br/>Ly do: {reason}]
+    CreateTx --> NotifyUser[Notify User<br/>Yêu cầu rut tien bi tu choi<br/>Ly do: <reason>]
     
     NotifyUser --> End([Done])
     
@@ -1309,7 +1309,7 @@ flowchart TD
     
     %% Notify
     CreateTicket --> NotifyUser[Notify User<br/>Yêu cầu dang dưoc xem xet<br/>Vui long cho 1-3 ngay lam viec]
-    NotifyUser --> NotifyAdmin[Notify Security Team<br/>New hold case: {request_id}]
+    NotifyUser --> NotifyAdmin[Notify Security Team<br/>New hold case: <request_id>]
     
     %% Investigation Options
     NotifyAdmin --> InvestigationEnd([Investigation...])

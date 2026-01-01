@@ -311,7 +311,7 @@ flowchart TD
     ShowForm --> AdminInput[Admin nhap:<br/>- So Trust can nap<br/>- Ly do<br/>- Note]
 
     %% Validation Phase
-    AdminInput --> Validate{Validate}
+    AdminInput --> Validate<Validate>
     Validate -->|FAIL| Error[Error:<br/>- Trust > 0<br/>- Trust <= 1,000,000<br/>- Ly do bat buoc]
     Validate -->|PASS| CheckPerm{Admin co permission<br/>WALLET_DEPOSIT?}
     CheckPerm -->|No| PermError[Khong co quyen thuc hien]
@@ -622,11 +622,11 @@ flowchart TD
     ShowInfo --> UserInput[Seller nhap:<br/>- So Trust muon rut<br/>- Thông tin ngân hang]
 
     %% Validation Phase
-    UserInput --> Validate{Validate}
+    UserInput --> Validate<Validate>
     Validate -->|FAIL| Error1[ Errors:<br/>- Min 10 Trust<br/>- Max 100,000 Trust/lần<br/>- available >= amount<br/>- Bank info dầy du]
     Validate -->|PASS| CalcActual[Tinh so tien thuc nhan:<br/>commission_to_deduct = min(amountx5%, commission_debt)<br/>actual_trust = amount - commission_to_deduct<br/>vnd_amount = actual_trust x 1000]
 
-    CalcActual --> ShowConfirm[Hien thi xac nhan:<br/>Rut: {amount} Trust<br/>Commission tru: {commission_to_deduct} Trust<br/>Nhan ve: {vnd_amount} VND]
+    CalcActual --> ShowConfirm[Hien thi xac nhan:<br/>Rut: <amount> Trust<br/>Commission tru: <commission_to_deduct> Trust<br/>Nhan ve: <vnd_amount> VND]
     ShowConfirm --> UserConfirm{Seller xac nhan?}
     UserConfirm -->|Cancel| CancelOp[Huy thao tac]
     UserConfirm -->|Confirm| BeginTx[ BEGIN Transaction]
@@ -651,7 +651,7 @@ flowchart TD
     BG_Check -->|PASS - Manual review| BG_ManualReview[Update: PENDING_REVIEW<br/>Notify admin<br/>Keep funds locked]
     BG_Check -->|PASS - Auto approve| BG_Approve[Update request: APPROVED<br/>Enqueue transfer job]
 
-    BG_Reject --> BG_NotifyReject[Notify seller:<br/>Yêu cầu bi tu choi: {reason}]
+    BG_Reject --> BG_NotifyReject[Notify seller:<br/>Yêu cầu bi tu choi: <reason>]
     BG_ManualReview --> BG_NotifyReview[Notify seller:<br/>Dang cho xet duyet]
     BG_Approve --> BG_NotifyApprove[Notify seller:<br/>Da duyet, dang chuyen khoan]
 
@@ -699,7 +699,7 @@ flowchart TD
 
     %% Notification
     CommitTx --> InvalidateCache[Xoa cache Seller + Platform]
-    InvalidateCache --> NotifySeller[Notify Seller:<br/>Rut {trust_amount} Trust thanh công<br/>Commission: {commission_deduct} Trust<br/>Da chuyen {vnd_amount} VND<br/>Ref: {bank_ref}]
+    InvalidateCache --> NotifySeller[Notify Seller:<br/>Rut <trust_amount> Trust thanh công<br/>Commission: <commission_deduct> Trust<br/>Da chuyen <vnd_amount> VND<br/>Ref: <bank_ref>]
     NotifySeller --> End([Done])
 
     style Start fill:#339af0,stroke:#1971c2
@@ -928,7 +928,7 @@ flowchart TD
     SelectSeller --> ShowForm[Form nhap:<br/>- Adjustment amount (+/-)<br/>- Reason]
 
     ShowForm --> AdminInput[Admin nhap:<br/>amount: -10 Trust<br/>reason: Hoan commission do loi he thong]
-    AdminInput --> Validate{Validate}
+    AdminInput --> Validate<Validate>
     Validate -->|FAIL| Error[ Reason bat buoc]
     Validate -->|PASS| CheckPerm{Has COMMISSION_ADJUST perm?}
     CheckPerm -->|No| PermError[ No permission]
@@ -942,7 +942,7 @@ flowchart TD
     UpdateDebt --> CreateAudit[AuditLog<br/>action: COMMISSION_ADJUST<br/>admin, seller, amount, reason]
     CreateAudit --> CommitTx[ COMMIT]
 
-    CommitTx --> NotifySeller[Notify Seller<br/>Commission debt dieu chinh: {amount}]
+    CommitTx --> NotifySeller[Notify Seller<br/>Commission debt dieu chinh: <amount>]
     NotifySeller --> End([Done])
 
     style Start fill:#339af0,stroke:#1971c2
@@ -990,7 +990,7 @@ flowchart TD
     BuyerInput --> CreateDispute[Tao DisputeCase<br/>type: REFUND_REQUEST<br/>status: PENDING<br/>requested_by: buyer]
     CreateDispute --> LockEscrow[Update EscrowHold<br/>status: DISPUTED<br/>locked_at: NOW]
 
-    LockEscrow --> NotifySeller[Notify Seller:<br/>Buyer yêu cầu hoan tien<br/>Ly do: {reason}]
+    LockEscrow --> NotifySeller[Notify Seller:<br/>Buyer yêu cầu hoan tien<br/>Ly do: <reason>]
     NotifySeller --> NotifyAdmin[Notify Admin:<br/>Co tranh chap moi cần xu ly]
     NotifyAdmin --> End1([Cho Admin xu ly])
 
@@ -1065,7 +1065,7 @@ flowchart TD
     CreateAudit --> CommitTx[ COMMIT]
 
     CommitTx --> NotifyBuyer[Notify Buyer:<br/>Seller da huy dơn<br/>Tien da hoan vao vi]
-    NotifyBuyer --> NotifyAdmin[Notify Admin:<br/>Seller cancel: {order_id}]
+    NotifyBuyer --> NotifyAdmin[Notify Admin:<br/>Seller cancel: <order_id>]
     NotifyAdmin --> End([Done])
 
     style Start fill:#339af0,stroke:#1971c2
@@ -1121,7 +1121,7 @@ flowchart TD
     SelectUser --> ShowForm[Form nhap:<br/>- So Trust cần tru<br/>- Ly do<br/>- Loai deduct]
     ShowForm --> AdminInput[Admin nhap thông tin]
 
-    AdminInput --> Validate{Validate}
+    AdminInput --> Validate<Validate>
     Validate -->|FAIL| Error[ Error:<br/>- amount > 0<br/>- amount <= available<br/>- Ly do >= 20 chars]
     Validate -->|PASS| CheckPerm{Has WALLET_DEDUCT perm?}
     CheckPerm -->|No| PermError[ No permission]
@@ -1141,7 +1141,7 @@ flowchart TD
     UpdateWallet --> CreateAudit[AuditLog<br/>action: ADMIN_DEDUCT<br/>admin, user, amount, reason]
     CreateAudit --> CommitTx[ COMMIT]
 
-    CommitTx --> NotifyUser[Notify User:<br/>Admin da tru {amount} Trust<br/>Ly do: {reason}]
+    CommitTx --> NotifyUser[Notify User:<br/>Admin da tru <amount> Trust<br/>Ly do: <reason>]
     NotifyUser --> End([Done])
 
     style Start fill:#339af0,stroke:#1971c2
@@ -1162,7 +1162,7 @@ flowchart TD
     ShowWalletInfo --> ShowForm[Form nhap:<br/>- Amount to lock (hoac ALL)<br/>- Reason<br/>- Case reference]
 
     ShowForm --> AdminInput[Admin nhap thông tin]
-    AdminInput --> Validate{Validate}
+    AdminInput --> Validate<Validate>
     Validate -->|FAIL| Error[ Error:<br/>- amount <= available<br/>- Reason required<br/>- Case ref required]
     Validate -->|PASS| CheckPerm{Has WALLET_LOCK perm?}
     CheckPerm -->|No| PermError[ No permission]
@@ -1181,7 +1181,7 @@ flowchart TD
     UpdateWalletStatus -->|Yes| SuspendWallet[Update Wallet<br/>status: SUSPENDED]
     UpdateWalletStatus -->|No| KeepActive[Keep status: ACTIVE]
 
-    SuspendWallet --> NotifyUser[Notify User:<br/>Vi cua ban da bi khoa<br/>Ly do: {reason}<br/>Ma case: {case_ref}<br/>Liên he support]
+    SuspendWallet --> NotifyUser[Notify User:<br/>Vi cua ban da bi khoa<br/>Ly do: <reason><br/>Ma case: <case_ref><br/>Liên he support]
     KeepActive --> NotifyUser
     NotifyUser --> End([Done])
 
@@ -1208,7 +1208,7 @@ flowchart TD
     SelectLock --> ShowForm[Form nhap:<br/>- Resolution note<br/>- Unlock reason]
     ShowForm --> AdminInput[Admin nhap thông tin]
 
-    AdminInput --> Validate{Validate}
+    AdminInput --> Validate<Validate>
     Validate -->|FAIL| Error[ Resolution note required]
     Validate -->|PASS| CheckPerm{Has WALLET_UNLOCK perm?}
     CheckPerm -->|No| PermError[ No permission]
@@ -1293,9 +1293,9 @@ flowchart TD
 
     Start --> GetWallet[Lay wallet sau update]
     GetWallet --> Check1{total == sum of states?}
-    Check1 -->|No| Alert1[ CRITICAL ALERT<br/>Balance state mismatch<br/>Wallet: {wallet_id}<br/>total: {total}<br/>sum: {calculated}]
+    Check1 -->|No| Alert1[ CRITICAL ALERT<br/>Balance state mismatch<br/>Wallet: <wallet_id><br/>total: <total><br/>sum: <calculated>]
     Check1 -->|Yes| Check2{All states >= 0?}
-    Check2 -->|No| Alert2[ CRITICAL ALERT<br/>Negative balance detected<br/>Wallet: {wallet_id}]
+    Check2 -->|No| Alert2[ CRITICAL ALERT<br/>Negative balance detected<br/>Wallet: <wallet_id>]
     Check2 -->|Yes| Check3{available <= total?}
     Check3 -->|No| Alert3[ CRITICAL ALERT<br/>Available exceeds total]
     Check3 -->|Yes| Pass[ Balance check passed]
@@ -1342,8 +1342,8 @@ flowchart TD
     CreateSnapshot --> CheckSeverity{discrepancy > 100?}
     CreateSnapshot2 --> HasMore{Con wallet khac?}
 
-    CheckSeverity -->|Yes| AlertCritical[ CRITICAL ALERT to Admin<br/>Wallet {id} co chênh lech {amount} Trust]
-    CheckSeverity -->|No| AlertWarning[ WARNING to Admin<br/>Minor discrepancy: {amount}]
+    CheckSeverity -->|Yes| AlertCritical[ CRITICAL ALERT to Admin<br/>Wallet <id> co chênh lech <amount> Trust]
+    CheckSeverity -->|No| AlertWarning[ WARNING to Admin<br/>Minor discrepancy: <amount>]
 
     AlertCritical --> RequireManualReview[Status: REQUIRE_MANUAL_REVIEW<br/>Block wallet operations]
     AlertWarning --> HasMore
@@ -1380,7 +1380,7 @@ flowchart TD
     GetPlatform --> QueryActiveEscrows[Query active escrows<br/>WHERE status = HOLDING]
     QueryActiveEscrows --> SumEscrows[total_escrows = Σ(escrow.amount)]
     SumEscrows --> Compare2{platform.available == total_escrows?}
-    Compare2 -->|No| Alert2[ Platform wallet mismatch<br/>Expected: {total_escrows}<br/>Actual: {platform.available}]
+    Compare2 -->|No| Alert2[ Platform wallet mismatch<br/>Expected: <total_escrows><br/>Actual: {platform.available}]
     Compare2 -->|Yes| Pass2[ Check 2 passed]
 
     Pass2 --> Check3[Check 3: VND ↔ Trust Reconciliation]
