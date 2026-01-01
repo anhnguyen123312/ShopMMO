@@ -471,7 +471,7 @@ flowchart TD
     %% Validation
     UserInput --> Validate{Validate}
     Validate -->|FAIL| Error[ Loi:<br/>- Min 10,000 VND<br/>- Max 50,000,000 VND<br/>- Chia het cho 1,000]
-    Validate -->|PASS| CalcTrust[Tinh Trust<br/>100,000 ÷ 1,000 = 100 Trust]
+    Validate -->|PASS| CalcTrust[Tinh Trust<br/>100,000 / 1,000 = 100 Trust]
     
     %% Create Pending Transaction
     CalcTrust --> CreateTx[Tao Transaction #1<br/>Type: DEPOSIT_PENDING<br/>Status: PENDING<br/>amount: 100 Trust<br/>vnd: 100,000]
@@ -647,7 +647,7 @@ flowchart TD
     %% Process Each
     Loop --> GetInfo[Lay info:<br/>- escrow_amount<br/>- seller_id<br/>- order_id]
     GetInfo --> GetCommissionRate[Lay commission rate<br/>shop_commission_config<br/>hoac default 5%]
-    GetCommissionRate --> CalcCommission[commission = amount × rate<br/>seller_receives = amount - commission]
+    GetCommissionRate --> CalcCommission[commission = amount x rate<br/>seller_receives = amount - commission]
     
     %% Validate Platform
     CalcCommission --> CheckPlatform{Platform co du<br/>available >= amount?}
@@ -699,8 +699,8 @@ flowchart TD
     ShowBalance --> UserInput[Seller nhap:<br/>- So Trust: 500<br/>- Bank info]
     
     %% Calculate
-    UserInput --> CalcCommission[Tinh commission:<br/>rate = get_shop_rate(shop_id)<br/>commission = min(500 × rate, debt)<br/>VD: min(25, 50) = 25 Trust]
-    CalcCommission --> CalcNet[net = 500 - 25 = 475 Trust<br/>vnd = 475 × 1000 = 475,000 VND]
+    UserInput --> CalcCommission[Tinh commission:<br/>rate = get_shop_rate(shop_id)<br/>commission = min(500 x rate, debt)<br/>VD: min(25, 50) = 25 Trust]
+    CalcCommission --> CalcNet[net = 500 - 25 = 475 Trust<br/>vnd = 475 x 1000 = 475,000 VND]
     
     %% Confirm
     CalcNet --> ShowConfirm[Xac nhan:<br/>Rut: 500 Trust<br/>Commission: 25 Trust<br/>Nhan: 475,000 VND]
@@ -1180,7 +1180,7 @@ flowchart TD
     %% Pattern 2: Large sudden withdrawal
     Check2 --> Check2a[Pattern 2: Rut dot ngot lon]
     Check2a --> Query2[avg_balance_30d = AVG(daily balance)]
-    Query2 --> Eval2{withdrawal > avg × 5?}
+    Query2 --> Eval2{withdrawal > avg x 5?}
     Eval2 -->|Yes| Add2[risk_score += 0.4]
     Eval2 -->|No| Check3
     Add2 --> Check3
