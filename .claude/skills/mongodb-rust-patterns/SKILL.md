@@ -16,6 +16,8 @@ Production-ready patterns for **MongoDB Rust driver v3.1+**. Focus: connection p
 - Transactions for multi-document ACID
 - Index optimization for query patterns
 - ALL public APIs need `#[utoipa::path]` docs
+- ALL protected handlers need `#[protect()]` with permissions
+- Define permissions in `common/permissions.rs` before using
 
 ## 1. Connection Setup (CRITICAL)
 
@@ -302,6 +304,7 @@ impl RepositoryError {
 | `$unwind` everywhere | Group on array directly |
 | Fetch all fields | Use `projection` |
 | No pagination | Always `limit()` + `skip()` |
+| Missing `#[protect()]` | ALL protected handlers need permissions |
 
 ## Dependencies
 
@@ -316,8 +319,9 @@ anyhow = "1.0"
 tokio = { version = "1", features = ["full"] }
 futures = "0.3"
 
-# OpenAPI (REQUIRED)
+# OpenAPI & Auth (REQUIRED)
 utoipa = { version = "5.4", features = ["actix_extras"] }
 utoipa-swagger-ui = "8"
 validator = { version = "0.18", features = ["derive"] }
+actix-web-grants = "4"
 ```

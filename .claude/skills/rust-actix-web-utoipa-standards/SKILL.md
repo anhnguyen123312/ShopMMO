@@ -15,6 +15,8 @@ Production patterns for **Actix-web 4.9** + **MongoDB 3.1** + **utoipa 5.4**. La
 - Error chain: `DbError → ServiceError → ApiError`
 - User URLs: `/api/{module}/*`
 - Admin URLs: `/admin/api/{module}/*`
+- **ALWAYS add `#[protect()]` with permissions to handlers**
+- **Define permissions in `common/permissions.rs` first**
 
 ## Project Structure
 
@@ -202,6 +204,133 @@ pub struct PaginationMeta {
 }
 ```
 
+### 1.5 Permissions (REQUIRED)
+
+**Rule:** ALWAYS define permissions in `common/permissions.rs` BEFORE using them in handlers.
+
+```rust
+// common/permissions.rs
+use std::fmt;
+
+/// Permission format: resource:action
+#[derive(Debug, Clone, PartialEq)]
+pub struct Permission {
+    pub resource: String,
+    pub action: String,
+}
+
+impl Permission {
+    pub fn new(resource: &str, action: &str) -> Self {
+        Self {
+            resource: resource.to_string(),
+            action: action.to_string(),
+        }
+    }
+
+    pub fn as_str(&self) -> String {
+        format!("{}:{}", self.resource, self.action)
+    }
+}
+
+// Standard permissions (add module-specific ones here)
+pub mod perms {
+    use super::Permission;
+
+    // User module
+    pub const USERS_READ: &str = "users:read";
+    pub const USERS_UPDATE: &str = "users:update";
+    pub const USERS_DELETE: &str = "users:delete";
+    pub const USERS_MANAGE: &str = "users:manage";
+
+    // Wallet module
+    pub const WALLETS_READ: &str = "wallets:read";
+    pub const WALLETS_UPDATE: &str = "wallets:update";
+    pub const WALLETS_MANAGE: &str = "wallets:manage";
+
+    // Product module
+    pub const PRODUCTS_CREATE: &str = "products:create";
+    pub const PRODUCTS_READ: &str = "products:read";
+    pub const PRODUCTS_UPDATE: &str = "products:update";
+    pub const PRODUCTS_DELETE: &str = "products:delete";
+    pub const PRODUCTS_MANAGE: &str = "products:manage";
+
+    // Order module
+    pub const ORDERS_CREATE: &str = "orders:create";
+    pub const ORDERS_READ: &str = "orders:read";
+    pub const ORDERS_UPDATE: &str = "orders:update";
+    pub const ORDERS_MANAGE: &str = "orders:manage";
+
+    // Shop module
+    pub const SHOPS_CREATE: &str = "shops:create";
+    pub const SHOPS_READ: &str = "shops:read";
+    pub const SHOPS_UPDATE: &str = "shops:update";
+    pub const SHOPS_DELETE: &str = "shops:delete";
+    pub const SHOPS_MANAGE: &str = "shops:manage";
+
+    // Dispute module
+    pub const DISPUTES_CREATE: &str = "disputes:create";
+    pub const DISPUTES_READ: &str = "disputes:read";
+    pub const DISPUTES_RESPOND: &str = "disputes:respond";
+    pub const DISPUTES_RESOLVE: &str = "disputes:resolve";
+    pub const DISPUTES_MANAGE: &str = "disputes:manage";
+}
+
+// Role permissions mapping
+pub fn role_permissions(role: &str) -> Vec<&'static str> {
+    match role {
+        "admin" => vec![
+            perms::USERS_MANAGE,
+            perms::WALLETS_MANAGE,
+            perms::PRODUCTS_MANAGE,
+            perms::ORDERS_MANAGE,
+            perms::SHOPS_MANAGE,
+            perms::DISPUTES_MANAGE,
+        ],
+        "vendor" => vec![
+            perms::PRODUCTS_CREATE,
+            perms::PRODUCTS_READ,
+            perms::PRODUCTS_UPDATE,
+            perms::ORDERS_READ,
+            perms::SHOPS_READ,
+            perms::SHOPS_UPDATE,
+            perms::DISPUTES_RESPOND,
+            perms::WALLETS_READ,
+        ],
+        "buyer" => vec![
+            perms::PRODUCTS_READ,
+            perms::ORDERS_CREATE,
+            perms::ORDERS_READ,
+            perms::SHOPS_READ,
+            perms::DISPUTES_CREATE,
+            perms::WALLETS_READ,
+        ],
+        _ => vec![],
+    }
+}
+```
+
+**Permission naming convention:**
+
+| Resource | Actions | Permission Format |
+|----------|---------|-------------------|
+| users | create, read, update, delete, manage | `users:create`, `users:manage` |
+| wallets | read, update, manage | `wallets:read` |
+| products | create, read, update, delete, manage | `products:create` |
+| orders | create, read, update, manage | `orders:create` |
+| shops | create, read, update, delete, manage | `shops:update` |
+| disputes | create, read, respond, resolve, manage | `disputes:respond` |
+
+**Standard actions:**
+- `create` - Create new resources
+- `read` - View resources
+- `update` - Edit own resources
+- `delete` - Delete resources
+- `manage` - Full control (including others' resources)
+- `respond` - Special action (e.g., dispute response)
+- `resolve` - Admin resolution actions
+- `approve` - Approval actions
+- `export` - Export data
+
 ## 2. Module Pattern
 
 ### 2.1 Domain Model
@@ -326,12 +455,13 @@ impl WalletService {
 }
 ```
 
-### 2.5 Handler with OpenAPI (REQUIRED)
+### 2.5 Handler with OpenAPI + Permissions (REQUIRED)
 
 ```rust
 // modules/wallet/api/user/handlers.rs
 use actix_web::{web, HttpResponse, Responder};
-use crate::common::{errors::ApiResult, responses::ApiResponse, auth::AuthUser};
+use actix_web_grants::protect;
+use crate::common::{errors::ApiResult, responses::ApiResponse, auth::AuthUser, permissions::perms};
 use crate::modules::wallet::{dto::{CreateWalletRequest, WalletResponse}, service::WalletService};
 
 /// Create wallet
@@ -344,9 +474,11 @@ use crate::modules::wallet::{dto::{CreateWalletRequest, WalletResponse}, service
         (status = 201, description = "Wallet created", body = ApiResponse<WalletResponse>),
         (status = 400, description = "Validation error", body = crate::common::errors::ErrorResponse),
         (status = 401, description = "Unauthorized", body = crate::common::errors::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::common::errors::ErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
+#[protect(perms::WALLETS_UPDATE)]
 pub async fn create_wallet(
     service: web::Data<WalletService>,
     auth_user: AuthUser,
@@ -363,15 +495,67 @@ pub async fn create_wallet(
     responses(
         (status = 200, description = "Success", body = ApiResponse<i64>),
         (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
     ),
     security(("bearer_auth" = []))
 )]
+#[protect(perms::WALLETS_READ)]
 pub async fn get_balance(
     service: web::Data<WalletService>,
     auth_user: AuthUser,
 ) -> ApiResult<impl Responder> {
     let balance = service.get_balance(auth_user.id).await?;
     Ok(HttpResponse::Ok().json(ApiResponse::new(balance)))
+}
+
+/// Admin: Get user wallet
+#[utoipa::path(
+    get,
+    path = "/admin/api/wallet/users/{user_id}",
+    tag = "wallet",
+    params(
+        ("user_id" = String, Path, description = "User ID")
+    ),
+    responses(
+        (status = 200, description = "Success", body = ApiResponse<WalletResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Not found"),
+    ),
+    security(("bearer_auth" = []))
+)]
+#[protect(perms::WALLETS_MANAGE)]
+pub async fn get_user_wallet(
+    service: web::Data<WalletService>,
+    path: web::Path<String>,
+) -> ApiResult<impl Responder> {
+    let user_id = path.into_inner();
+    let wallet = service.get_wallet(&user_id).await?;
+    Ok(HttpResponse::Ok().json(ApiResponse::new(WalletResponse::from(wallet))))
+}
+```
+
+**Permission patterns:**
+
+```rust
+// Single permission
+#[protect("products:read")]
+
+// Multiple permissions (OR logic - user needs ONE of these)
+#[protect(any("products:create", "products:manage"))]
+
+// Role-based (admin only)
+#[protect("admin")]
+
+// Ownership check pattern
+#[protect("products:update")]
+pub async fn update_product(
+    auth_user: AuthUser,
+    product_id: web::Path<String>,
+) -> ApiResult<impl Responder> {
+    // Service checks if user owns product OR is admin
+    let product = service.get_product_for_update(&product_id, &auth_user).await?;
+    Ok(HttpResponse::Ok().json(ApiResponse::new(product)))
 }
 ```
 
@@ -432,8 +616,9 @@ async fn main() -> std::io::Result<()> {
 | Task | Pattern |
 |------|---------|
 | Status enum | Define in `common/status.rs`, import everywhere |
+| Permissions | Define in `common/permissions.rs`, use `#[protect()]` |
 | Errors | `DbError → ServiceError → ApiError` chain |
-| Handler | `#[utoipa::path]` + validate → service call → `ApiResponse` |
+| Handler | `#[utoipa::path]` + `#[protect()]` + validate → service → `ApiResponse` |
 | Repository | Pure MongoDB operations, return domain models |
 | Service | Business logic, validation, coordinate repos |
 | User routes | `/api/{module}/*` |
@@ -446,13 +631,16 @@ async fn main() -> std::io::Result<()> {
 | Inline status enum | Use from `common/status.rs` |
 | Skip repository layer | Always: Handler → Service → Repository |
 | Missing `#[utoipa::path]` | ALL public handlers need OpenAPI docs |
+| Missing `#[protect()]` | ALL protected handlers need permissions |
 | Wrong route structure | User: `/api/*`, Admin: `/admin/api/*` |
+| Hardcode permissions | Define in `common/permissions.rs` first |
 
 ## Dependencies
 
 ```toml
 [dependencies]
 actix-web = "4.9"
+actix-web-grants = "4"
 mongodb = "3.1"
 redis = "0.27"
 utoipa = { version = "5.4", features = ["actix_extras"] }
