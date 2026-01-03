@@ -36,7 +36,8 @@
       "Bash(pkill:*)",
       "Skill(superpowers:writing-skills)",
       "Skill(superpowers:writing-skills:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(cat:*)"
     ]
   }
 }

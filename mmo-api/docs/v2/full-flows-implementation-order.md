@@ -1265,7 +1265,7 @@ PHASE 1: AUTH & USER (Week 3-4)
 │  ├─ Register handler
 │  ├─ Login handler
 │  ├─ Password hashing (bcrypt)
-│  ├─ Email verification
+│  ├─ Telegram Verify
 │  └─ Password reset
 │
 ├─ 2. 2FA Module (Optional but important)
