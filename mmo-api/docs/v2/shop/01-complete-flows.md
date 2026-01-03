@@ -91,9 +91,9 @@ Tài liệu này định nghĩa TẤT CẢ flows, điều kiện và biến số
          │
          │ UI Fields:
          │ ├── shop_logo (file upload, REQUIRED)
-         │ │   ├── Allowed: jpg, jpeg, png
-         │ │   ├── Max size: 2MB
-         │ │   └── Recommended: 200x200px
+         │   ├── Allowed: jpg, jpeg, png
+         │   ├── Max size: 2MB
+         │   └── Recommended: 200x200px
          │ └── shop_banner (file upload, OPTIONAL)
          │     ├── Allowed: jpg, jpeg, png
          │     ├── Max size: 5MB
@@ -217,7 +217,7 @@ Tài liệu này định nghĩa TẤT CẢ flows, điều kiện và biến số
 [Bước 13] Queue welcome email
          │
          ├── To: vendor.email
-         ├── Subject: "Chào mừng đến với TaphoaMMO"
+         ├── Subject: "Chào mừng đến với P2PMMO"
          ├── Template: welcome_email.html
          └── Queue: email_queue
          │
@@ -402,10 +402,9 @@ Tài liệu này định nghĩa TẤT CẢ flows, điều kiện và biến số
          │   """
          │
          ▼
-[Bước 10] Send test notification (optional)
+[Bước 10] Send test notification (direct call)
          │
-         ├── Queue: telegram_notification_queue
-         ├── Event: test_notification
+         ├── Gọi telegram_service.send_message()
          ├── Message: "🔔 Đây là thông báo kiểm tra.
          │               Bạn đã thiết lập thành công!"
          │
@@ -615,7 +614,7 @@ Tài liệu này định nghĩa TẤT CẢ flows, điều kiện và biến số
          │   │         orders: { $sum: 1 }
          │   │     }},
          │   │     { $sort: { _id: 1 }}
-         │   │   ]
+         │   │     ]
          │   └── Fill missing dates with 0
          │
          ├── Return: revenue_chart (Array of 7 data points)
@@ -879,7 +878,7 @@ Tài liệu này định nghĩa TẤT CẢ flows, điều kiện và biến số
          │   │     old_slug: String,
          │   │     created_at: DateTime,
          │   │     expires_at: DateTime (NOW + 30 days)
-         │   │   }
+         │   │     }
          │
          └── Continue sang [Bước 6]
          │
@@ -962,8 +961,8 @@ Tài liệu này định nghĩa TẤT CẢ flows, điều kiện và biến số
          ├── Generate new verification code
          ├── Store in Redis: telegram:verify:{shop_id}
          │
-         ├── Send notification to old chat (if exists):
-         │   ├── Queue: telegram_notification_queue
+         ├── Gọi telegram_service.send_message() (direct):
+         │   ├── To: old telegram_chat_id (if exists)
          │   ├── Message: "Telegram username đã thay đổi.
          │                 Vui lòng xác nhận lại."
          │
@@ -1109,13 +1108,12 @@ Tài liệu này định nghĩa TẤT CẢ flows, điều kiện và biến số
          └── Continue
          │
          ▼
-[Bước 5] Send notifications
+[Bước 5] Send notifications (direct telegram calls)
          │
          ├── Loop: for upgraded_shop in upgrade_list
          │   │
-         │   ├── Queue Telegram notification:
-         │   │   ├── Queue: telegram_notification_queue
-         │   │   ├── Event: level_up
+         │   ├── Gọi telegram_service.notify_level_up() (direct):
+         │   │   ├── To: shop.telegram_chat_id
          │   │   ├── Message:
          │   │   │   """
          │   │   │   🎉 Chúc mừng!
@@ -1125,7 +1123,6 @@ Tài liệu này định nghĩa TẤT CẢ flows, điều kiện và biến số
          │   │   │   │
          │   │   │   Phí sàn: {old_rate}% → {new_rate}%
          │   │   │   """
-         │   │   └── Priority: Normal
          │   │
          │   ├── Queue Email notification:
          │   │   ├── Queue: email_queue
@@ -1142,7 +1139,7 @@ Tài liệu này định nghĩa TẤT CẢ flows, điều kiện và biến số
          │       │     message: "Shop đã lên {new_level}",
          │       │     read: false,
          │       │     created_at: DateTime
-         │       │   }
+         │       │     }
          │
          └── Continue
          │
@@ -1388,7 +1385,7 @@ function getCommissionRate(level) {
          │   │     { $sort: { created_at: -1 }},
          │   │     { $skip: page * 20 },
          │   │     { $limit: 20 }
-         │   │   ]
+         │   │     ]
          │
          └── Return: products (Array)
          │
@@ -1431,7 +1428,7 @@ function getCommissionRate(level) {
          │   │     { $sort: { created_at: -1 }},
          │   │     { $skip: page * 10 },
          │   │     { $limit: 10 }
-         │   │   ]
+         │   │     ]
          │
          └── Return: reviews (Array)
          │
@@ -1505,6 +1502,66 @@ function getCommissionRate(level) {
 | View count fail | MongoDB error | Log only | - |
 | No products | empty array | Show message | "Chưa có sản phẩm nào" |
 | No reviews | empty array | Show message | "Chưa có đánh giá nào" |
+
+---
+
+## 7. Liên Hệ Shop Qua Telegram (Buyer)
+
+### 7.1 Điều kiện thực hiện
+
+┌─────────────────────────────────────────────────────────────┐
+│          ĐIỀU KIỆN LIÊN HỆ TELEGRAM                        │
+└─────────────────────────────────────────────────────────────┘
+
+1. **Preconditions**
+   ├── Actor: Buyer (không cần đăng nhập)
+   ├── State: Đang xem trang shop
+   └── Data: shop.telegram_username
+
+2. **Input Requirements**
+   └── None (click action)
+
+3. **Validation Rules**
+   └── telegram_username phải tồn tại
+
+4. **Edge Cases**
+   ├── Telegram username không có ──► Hide button
+   └── Invalid username ──► Log error
+
+---
+
+### 7.2 Flow Liên Hệ Telegram
+
+┌─────────────────────────────────────────────────────────────┐
+│            FLOW LIÊN HỆ TELEGRAM                            │
+└─────────────────────────────────────────────────────────────┘
+
+[Bước 1] User clicks "Liên hệ qua Telegram"
+         │
+         ├── Get shop.telegram_username
+         ├── username not exists ──► Do nothing
+         ├── username exists ──► [Bước 2]
+         │
+         ▼
+[Bước 2] Generate Telegram link
+         │
+         ├── Format: https://t.me/{username_without_@}
+         ├── Example: https://t.me/taphoammo
+         │
+         ▼
+[Bước 3] Open Telegram
+         │
+         ├── Action: window.open(telegram_link, '_blank')
+         └── END
+
+---
+
+### 7.3 Edge Cases & Error Handling
+
+| Case | Condition | Handling | User Message |
+|------|-----------|----------|--------------|
+| Username không tồn tại | telegram_username = null | Hide button | - |
+| Invalid username | invalid format | Log error | - |
 
 ---
 
@@ -1724,19 +1781,20 @@ function getCommissionRate(level) {
          └── Fire and forget
          │
          ▼
-[Bước 10] Send notification to vendor
+[Bước 10] Send notification to vendor (direct call)
          │
-         ├── Queue: telegram_notification_queue
-         ├── Event: new_review
-         ├── Message:
-         │   """
-         │   ⭐ Đánh giá mới từ khách hàng!
+         ├── Gọi telegram_service.send_message() (direct):
+         │   ├── To: shop.telegram_chat_id
+         │   ├── Message:
+         │   │   """
+         │   │   ⭐ Đánh giá mới từ khách hàng!
+         │   │
+         │   │   Đơn hàng: #{order_code}
+         │   │   Số sao: {rating}⭐
+         │   │   Nội dung: {comment}
+         │   │   """
          │
-         │   Đơn hàng: #{order_code}
-         │   Số sao: {rating}⭐
-         │   Nội dung: {comment}
-         │   """
-         └── Priority: Normal
+         └── Continue
          │
          ▼
 [Bước 11] Invalidate shop cache
@@ -2049,7 +2107,7 @@ function getCommissionRate(level) {
          │   ├── Filter: {
          │   │     shop_id: shop_id,
          │   │     status: "active"
-         │   │   }
+         │   │     }
          │   ├── Set:
          │   │   status: "hidden"
          │   │   updated_at: DateTime
@@ -2081,12 +2139,12 @@ function getCommissionRate(level) {
          │   │   ├── $inc: { available_balance: order.total }
          │   │   ├── Create transaction record
          │   │
-         │   ├── Notify buyer:
-         │   │   ├── Queue: telegram_notification_queue
+         │   ├── Gọi telegram_service.send_message() (direct):
+         │   │   ├── To: buyer.telegram_chat_id
          │   │   ├── Message: "Đơn hàng đã bị hủy vì shop bị đình chỉ"
          │   │
-         │   └── Notify vendor:
-         │       ├── Queue: telegram_notification_queue
+         │   └── Gọi telegram_service.send_message() (direct):
+         │       ├── To: shop.telegram_chat_id
          │       ├── Message: "Đơn hàng đã bị hủy và hoàn tiền cho buyer"
          │
          └── Continue sang [A9]
@@ -2111,7 +2169,7 @@ function getCommissionRate(level) {
          │   │     priority: "high",
          │   │     status: "pending",
          │   │     created_at: DateTime
-         │   │   }
+         │   │     }
          │
          ├── Notify admins:
          │   ├── Create notification for all admins
@@ -2158,7 +2216,7 @@ function getCommissionRate(level) {
          │   │   ├── What happens next
          │   │   └── Appeal process
          │
-         ├── Queue Telegram:
+         ├── Gọi telegram_service.send_message() (direct):
          │   ├── To: shop.telegram_chat_id
          │   ├── Message:
          │   │   """
@@ -2194,7 +2252,7 @@ function getCommissionRate(level) {
          │   │     },
          │   │     ip_address: client_ip,
          │   │     created_at: DateTime
-         │   │   }
+         │   │     }
          │
          └── Continue sang [A12]
          │
@@ -2223,7 +2281,7 @@ function getCommissionRate(level) {
 |------|-----------|----------|--------------|
 | Shop not found | DB query returns null | 404 | "Không tìm thấy gian hàng" |
 | Reason empty | reason = null/empty | Validate | "Vui lòng nhập lý do" |
-| Invalid duration | not temporary|permanent | Validate | "Thời hạn không hợp lệ" |
+| Invalid duration | not temporary\|permanent | Validate | "Thời hạn không hợp lệ" |
 | duration_days missing | temporary but no days | Validate | "Vui lòng nhập số ngày" |
 | No pending orders | empty orders array | Skip | - |
 | Wallet not found | vendor_wallet not found | Log only | - |
@@ -2365,7 +2423,7 @@ function getCommissionRate(level) {
          │   │     admin_id: admin_id,
          │   │     notes: notes,
          │   │     created_at: DateTime
-         │   │   }
+         │   │     }
          │
          └── Continue sang [A8]
          │
@@ -2384,7 +2442,7 @@ function getCommissionRate(level) {
          │   │   ├── Custom commission (if set)
          │   │   └── Contact info for support
          │
-         ├── Queue Telegram:
+         ├── Gọi telegram_service.notify_level_up() (direct):
          │   ├── To: shop.telegram_chat_id
          │   ├── Message:
          │   │   """
@@ -2393,7 +2451,7 @@ function getCommissionRate(level) {
          │   │   Gian hàng của bạn đã trở thành
          │   │   ✅ PARTNER
          │   │
-         │   │   Cảm ơn sự đồng hành cùng TaphoaMMO!
+         │   │   Cảm ơn sự đồng hành cùng P2PMMO!
          │   │   """
          │
          └── Continue sang [A9]
@@ -2415,7 +2473,7 @@ function getCommissionRate(level) {
          │   │     },
          │   │     ip_address: client_ip,
          │   │     created_at: DateTime
-         │   │   }
+         │   │     }
          │
          └── Continue sang [A10]
          │
@@ -2448,340 +2506,285 @@ function getCommissionRate(level) {
 
 ---
 
-# PHẦN 4: FLOWS HỆ THỐNG (Background Jobs)
+# PHẦN 4: TELEGRAM BOT INTEGRATION
 
-## 13. Gửi Telegram Notifications (Queue Worker)
+## 12. Telegram Bot Service Design
 
-### 13.1 Điều kiện thực hiện
+### 12.1 Kiến trúc Telegram Bot
 
-┌─────────────────────────────────────────────────────────────┐
-│       ĐIỀU KIỆN GỬI TELEGRAM NOTIFICATIONS                  │
-└─────────────────────────────────────────────────────────────┘
+**Thay đổi kiến trúc:**
+- ❌ KHÔNG sử dụng Queue Worker (Redis queue + background worker)
+- ✅ Sử dụng trực tiếp Telegram Bot Library cho Rust
+- ✅ Gọi `send_message()` trong các function như gọi `logger::info()`
 
-1. **Preconditions**
-   ├── Actor: System (Queue Worker)
-   ├── State: Queue worker đang chạy
-   └── Data: notification_data từ queue
+### 12.2 Telegram Bot Library cho Rust
 
-2. **Input Requirements** (Từ queue)
-   ├── shop_id: ObjectId (required)
-   ├── event_type: Enum (required)
-   │   ├── new_order
-   │   ├── order_paid
-   │   ├── dispute_opened
-   │   ├── low_stock
-   │   ├── product_sold_out
-   │   ├── level_up
-   │   └── daily_summary
-   ├── data: Object (required) - event-specific data
-   └── priority: Enum (default: normal)
+**Recommended Crate:** `teloxide` hoặc `frankenstein`
 
-3. **Validation Rules**
-   ├── shop_id phải tồn tại
-   ├── telegram_verified = true
-   └── telegram_chat_id không null
+```toml
+# Cargo.toml
+[dependencies]
+teloxide = { version = "0.12", features = ["full"] }
+log = "0.4"
+```
 
-4. **Edge Cases**
-   ├── Shop không tồn tại ──► Log error, discard
-   ├── Telegram chưa verified ──► Log warning, discard
-   ├── Bot API error ──► Retry 3x, then dead letter queue
-   └── Bot bị block ──► Mark shop.has_issue = true
+### 12.3 Telegram Service Structure
 
----
+```rust
+// src/modules/shop/telegram_service.rs
 
-### 13.2 Flow Gửi Telegram Notifications
+use teloxide::{prelude::*, types::ParseMode};
+use anyhow::Result;
 
-┌─────────────────────────────────────────────────────────────┐
-│       FLOW GỬI TELEGRAM NOTIFICATIONS                      │
-└─────────────────────────────────────────────────────────────┘
+pub struct TelegramService {
+    bot: Bot,
+}
 
-[B1] Queue worker fetches next item
-         │
-         ├── Action: BRPOP telegram_notification_queue
-         ├── Timeout: 30 seconds (blocking)
-         │
-         ├── Queue empty ──► Wait and retry
-         ├── Item fetched ──► [B2]
-         │
-         ▼
-[B2] Parse notification data
-         │
-         ├── Expected JSON structure:
-         │   {
-         │     shop_id: ObjectId,
-         │     event_type: String,
-         │     data: Object,
-         │     priority: String
-         │   }
-         │
-         ├── Invalid JSON ──► Log error, discard
-         ├── Valid JSON ──► [B3]
-         │
-         ▼
-[B3] Get shop Telegram info
-         │
-         ├── Query MongoDB:
-         │   ├── Collection: shops
-         │   ├── Filter: { _id: shop_id }
-         │   ├── Project: {
-         │   │     telegram_chat_id: 1,
-         │   │     telegram_verified: 1,
-         │   │     telegram_username: 1
-         │   │   }
-         │   └── Return: shop telegram info
-         │
-         ├── Shop not found ──► [B3a] Log error, discard
-         ├── telegram_chat_id null ──► [B3b] Log warning, discard
-         ├── telegram_verified = false ──► [B3b] Log warning, discard
-         ├── All good ──► [B4]
-         │
-         ▼
-[B3a] Log shop not found error
-         │
-         ├── Log: "Shop {shop_id} not found for notification"
-         └── Discard message
-         │
-         ▼
-         Loop back to [B1]
-         │
-         ▼
-[B3b] Log Telegram not ready
-         │
-         ├── Log: "Shop {shop_id} Telegram not verified/ready"
-         └── Discard message
-         │
-         ▼
-         Loop back to [B1]
-         │
-         ▼
-[B4] Generate message based on event_type
-         │
-         ├── event_type = "new_order" ──► [B4a]
-         ├── event_type = "order_paid" ──► [B4b]
-         ├── event_type = "dispute_opened" ──► [B4c]
-         ├── event_type = "low_stock" ──► [B4d]
-         ├── event_type = "product_sold_out" ──► [B4e]
-         ├── event_type = "level_up" ──► [B4f]
-         ├── event_type = "daily_summary" ──► [B4g]
-         ├── event_type unknown ──► Log error, discard
-         │
-         ▼
-[B4a] New Order message
-         │
-         ├── Template:
-         │   """
-         │   🆕 ĐƠN HÀNG MỚI
-         │
-         │   Mã đơn: #{order_code}
-         │   Sản phẩm: {product_name}
-         │   Số lượng: {quantity}
-         │   Tổng tiền: ₫{total}
-         │
-         │   Người mua: {buyer_username}
-         │   Thời gian: {created_at}
-         │
-         │   Vui lòng xử lý đơn hàng sớm.
-         │   """
-         │
-         └── Continue sang [B5]
-         │
-         ▼
-[B4b] Order Paid message
-         │
-         ├── Template:
-         │   """
-         │   ✅ ĐÃ THANH TOÁN
-         │
-         │   Mã đơn: #{order_code}
-         │   Số tiền: ₫{amount}
-         │
-         │   Ví của bạn:
-         │   +₫{net_amount} (sau phí sàn {commission_rate}%)
-         │
-         │   Số tiền sẽ có sẵn sau 3 ngày.
-         │   """
-         │
-         └── Continue sang [B5]
-         │
-         ▼
-[B4c] Dispute Opened message
-         │
-         ├── Template:
-         │   """
-         │   ⚠️ KHIẾU NẠI MỚI
-         │
-         │   Mã khiếu nại: #{dispute_id}
-         │   Đơn hàng: #{order_code}
-         │   Lý do: {reason}
-         │   Mô tả: {description}
-         │
-         │   Vui lòng phản hồi trong 24h.
-         │   Xem chi tiết: {url}
-         │   """
-         │
-         └── Continue sang [B5]
-         │
-         ▼
-[B4d] Low Stock message
-         │
-         ├── Template:
-         │   """
-         │   📉 SẮP HẾT HÀNG
-         │
-         │   Sản phẩm: {product_name}
-         │   Số lượng còn: {quantity}
-         │
-         │   Vui lòng nhập thêm hàng.
-         │   """
-         │
-         └── Continue sang [B5]
-         │
-         ▼
-[B4e] Product Sold Out message
-         │
-         ├── Template:
-         │   """
-         │   ❌ ĐÃ HẾT HÀNG
-         │
-         │   Sản phẩm: {product_name}
-         │
-         │   Vui lòng nhập thêm hàng để tiếp tục bán.
-         │   """
-         │
-         └── Continue sang [B5]
-         │
-         ▼
-[B4f] Level Up message
-         │
-         ├── Template:
-         │   """
-         │   🎉 LÊN LEVEL MỚI!
-         │
-         │   Chúc mừng gian hàng lên cấp độ:
-         │   {old_badge} → {new_badge}
-         │
-         │   Phí sàn: {old_rate}% → {new_rate}%
-         │
-         │   Cảm ơn bạn đã đồng hành cùng TaphoaMMO!
-         │   """
-         │
-         └── Continue sang [B5]
-         │
-         ▼
-[B4g] Daily Summary message
-         │
-         ├── Template:
-         │   """
-         │   📊 BÁO CÁO NGÀY {date}
-         │
-         │   Doanh thu: ₫{revenue}
-         │   Đơn hàng: {orders} đơn
-         │   Sản phẩm bán: {items_sold}
-         │
-         │   Đánh giá mới: {new_reviews} ⭐
-         │   Khiếu nại: {disputes} (pending: {pending_disputes})
-         │
-         │   Top sản phẩm:
-         │   1. {top_product_1} - {sold_1} sold
-         │   2. {top_product_2} - {sold_2} sold
-         │   3. {top_product_3} - {sold_3} sold
-         │   """
-         │
-         └── Continue sang [B5]
-         │
-         ▼
-[B5] Send via Telegram Bot API
-         │
-         ├── API: https://api.telegram.org/bot{bot_token}/sendMessage
-         ├── Method: POST
-         ├── Body:
-         │   ├── chat_id: {chat_id}
-         │   ├── text: {message_text}
-         │   ├── parse_mode: HTML
-         │   └── disable_web_page_preview: true
-         │
-         ├── HTTP 200 ──► [B6a] Success
-         ├── HTTP 4xx ──► [B6b] Client error
-         ├── HTTP 5xx/Network error ──► [B6c] Server error
-         │
-         ▼
-[B6a] Handle success response
-         │
-         ├── Log: "Notification sent successfully to shop {shop_id}"
-         ├── Increment: shop.notification_sent_count (optional)
-         │
-         └── Loop back to [B1]
-         │
-         ▼
-[B6b] Handle client error (4xx)
-         │
-         ├── Log: "Client error: {error_code} - {error_message}"
-         ├── Mark shop issue:
-         │   ├── Update MongoDB:
-         │   │   Set: telegram_has_issue = true
-         │   │     telegram_issue_at = DateTime
-         │
-         ├── Notify admins:
-         │   └── Create notification: "Shop {shop_id} Telegram issue"
-         │
-         └── Discard message, loop back to [B1]
-         │
-         ▼
-[B6c] Handle server error (5xx/Network)
-         │
-         ├── Log: "Server error, will retry: {error}"
-         ├── Re-queue message:
-         │   ├── LPUSH telegram_notification_queue
-         │   ├── With delay (exponential backoff)
-         │   └── Max retries: 3
-         │
-         ├── Retry count < 3 ──► Loop back to [B1]
-         ├── Retry count >= 3 ──► Move to dead letter queue
-         │
-         ▼
-         Move to dead letter queue:
-         ├── LPUSH telegram_notification_dlq
-         ├── Log: "Max retries exceeded, moved to DLQ"
-         │
-         └── Loop back to [B1]
-         │
-         ▼
-[B7] (Optional) Update notification stats
-         │
-         ├── Insert MongoDB:
-         │   ├── Collection: notification_log
-         │   ├── Document:
-         │   │   {
-         │   │     shop_id: shop_id,
-         │   │     event_type: event_type,
-         │   │     status: "sent" | "failed",
-         │   │     sent_at: DateTime,
-         │   │     error_message: error (if failed)
-         │   │   }
-         │
-         └── Fire and forget
-         │
-         └── END (Worker continues running)
+impl TelegramService {
+    pub fn new() -> Self {
+        let bot_token = std::env::var("TELEGRAM_BOT_TOKEN")
+            .expect("TELEGRAM_BOT_TOKEN must be set");
+        Self {
+            bot: Bot::new(bot_token),
+        }
+    }
 
----
+    /// Gửi text message đơn giản
+    pub async fn send_message(
+        &self,
+        chat_id: i64,
+        text: String,
+    ) -> Result<()> {
+        self.bot
+            .send_message(ChatId(chat_id), text)
+            .parse_mode(ParseMode::Html)
+            .disable_web_page_preview(true)
+            .send()
+            .await?;
 
-### 13.3 Edge Cases & Error Handling
+        Ok(())
+    }
+
+    /// Gửi notification khi có đơn hàng mới
+    pub async fn notify_new_order(
+        &self,
+        chat_id: i64,
+        order_code: &str,
+        product_name: &str,
+        total: i64,
+    ) -> Result<()> {
+        let message = format!(
+            "🆕 ĐƠN HÀNG MỚI\n\n\
+             Mã đơn: #{}\n\
+             Sản phẩm: {}\n\
+             Tổng tiền: ₫{}\n\n\
+             Vui lòng xử lý đơn hàng.",
+            order_code, product_name, total
+        );
+
+        self.send_message(chat_id, message).await
+    }
+
+    /// Gửi notification khi đơn hàng đã thanh toán
+    pub async fn notify_order_paid(
+        &self,
+        chat_id: i64,
+        order_code: &str,
+        amount: i64,
+        net_amount: i64,
+        commission_rate: f64,
+    ) -> Result<()> {
+        let message = format!(
+            "✅ ĐÃ THANH TOÁN\n\n\
+             Mã đơn: #{}\n\
+             Số tiền: ₫{}\n\n\
+             Ví của bạn:\n\
+             +₫{} (sau phí sàn {}%)\n\n\
+             Số tiền sẽ có sẵn sau 3 ngày.",
+            order_code, amount, net_amount, commission_rate
+        );
+
+        self.send_message(chat_id, message).await
+    }
+
+    /// Gửi notification khi có khiếu nại
+    pub async fn notify_dispute(
+        &self,
+        chat_id: i64,
+        dispute_id: &str,
+        order_code: &str,
+        reason: &str,
+    ) -> Result<()> {
+        let message = format!(
+            "⚠️ KHIẾU NẠI MỚI\n\n\
+             Mã khiếu nại: #{}\n\
+             Đơn hàng: #{}\n\
+             Lý do: {}\n\n\
+             Vui lòng phản hồi trong 24h.",
+            dispute_id, order_code, reason
+        );
+
+        self.send_message(chat_id, message).await
+    }
+
+    /// Gửi notification khi sắp hết hàng
+    pub async fn notify_low_stock(
+        &self,
+        chat_id: i64,
+        product_name: &str,
+        quantity: i32,
+    ) -> Result<()> {
+        let message = format!(
+            "📉 SẮP HẾT HÀNG\n\n\
+             Sản phẩm: {}\n\
+             Số lượng còn: {}\n\n\
+             Vui lòng nhập thêm hàng.",
+            product_name, quantity
+        );
+
+        self.send_message(chat_id, message).await
+    }
+
+    /// Gửi notification khi lên level
+    pub async fn notify_level_up(
+        &self,
+        chat_id: i64,
+        old_level: &str,
+        new_level: &str,
+        old_rate: f64,
+        new_rate: f64,
+    ) -> Result<()> {
+        let badges = map_level_to_badge();
+        let message = format!(
+            "🎉 LÊN LEVEL MỚI!\n\n\
+             Chúc mừng gian hàng lên cấp độ:\n\
+             {} → {}\n\n\
+             Phí sàn: {}% → {}%\n\n\
+             Cảm ơn bạn đã đồng hành cùng P2PMMO!",
+            badges.get(old_level).unwrap_or(&"".to_string()),
+            badges.get(new_level).unwrap_or(&"".to_string()),
+            old_rate, new_rate
+        );
+
+        self.send_message(chat_id, message).await
+    }
+
+    /// Gửi báo cáo hàng ngày
+    pub async fn notify_daily_summary(
+        &self,
+        chat_id: i64,
+        date: &str,
+        revenue: i64,
+        orders: i32,
+        items_sold: i32,
+    ) -> Result<()> {
+        let message = format!(
+            "📊 BÁO CÁO NGÀY {}\n\n\
+             Doanh thu: ₫{}\n\
+             Đơn hàng: {} đơn\n\
+             Sản phẩm bán: {}\n\n\
+             Cảm ơn bạn đã nỗ lực!",
+            date, revenue, orders, items_sold
+        );
+
+        self.send_message(chat_id, message).await
+    }
+}
+
+// Helper function
+fn map_level_to_badge() -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
+    map.insert("new".to_string(), "🆕".to_string());
+    map.insert("silver".to_string(), "🥈".to_string());
+    map.insert("gold".to_string(), "🥇".to_string());
+    map.insert("diamond".to_string(), "💎".to_string());
+    map.insert("partner".to_string(), "✅".to_string());
+    map
+}
+```
+
+### 12.4 Cách Sử dụng Trong Code
+
+**Ví dụ: Trong Order Service**
+
+```rust
+// src/modules/order/service.rs
+
+use crate::modules::shop::telegram_service::TelegramService;
+use log::info;
+
+pub struct OrderService {
+    telegram: TelegramService,
+    // ... other fields
+}
+
+impl OrderService {
+    pub async fn create_order(
+        &self,
+        dto: CreateOrderDto,
+    ) -> Result<Order, ServiceError> {
+        // ... business logic ...
+
+        // Gửi Telegram notification (fire and forget)
+        if let Some(chat_id) = shop.telegram_chat_id {
+            let telegram = self.telegram.clone();
+            tokio::spawn(async move {
+                if let Err(e) = telegram.notify_new_order(
+                    chat_id,
+                    &order.order_code,
+                    &product.name,
+                    order.total,
+                ).await {
+                    error!("Failed to send Telegram notification: {}", e);
+                }
+            });
+        }
+
+        // Log như bình thường
+        info!("Order {} created successfully", order.order_code);
+
+        Ok(order)
+    }
+}
+```
+
+### 12.5 Error Handling
+
+```rust
+// Wrap Telegram call với error handling
+pub async fn safe_send_telegram(
+    telegram: &TelegramService,
+    chat_id: Option<i64>,
+    message_fn: impl FnOnce(&TelegramService) -> impl Future<Output = Result<()>>,
+) {
+    if let Some(chat_id) = chat_id {
+        if let Err(e) = message_fn(telegram).await {
+            // Log error nhưng không ảnh hưởng business logic
+            error!("Telegram notification failed: {}", e);
+            // Optional: Mark shop có vấn đề
+            // shop.telegram_has_issue = true;
+        }
+    }
+}
+```
+
+### 12.6 Edge Cases & Error Handling
 
 | Case | Condition | Handling | User Message |
 |------|-----------|----------|--------------|
-| Shop not found | DB query returns null | Log + Discard | - |
-| Telegram not verified | verified = false | Log + Discard | - |
-| chat_id null | telegram_chat_id = null | Log + Discard | - |
-| Bot API 4xx | Client error (blocked) | Mark issue | - |
-| Bot API 5xx | Server error | Retry 3x | - |
-| Network timeout | Request timeout | Retry 3x | - |
-| Max retries | Exceeded 3 retries | Dead letter queue | - |
+| chat_id null | telegram_chat_id = null | Skip notification | - |
+| Bot blocked | API return 403/Forbidden | Log error, mark issue | - |
+| Network error | Connection timeout | Log error only | - |
+| Invalid chat_id | API return 400 | Log error, mark issue | - |
+| Rate limit | Too many requests | Wait and retry | - |
 
 ---
 
-## 14. Báo Cáo Hàng Ngày (Cron Job)
+# PHẦN 5: FLOWS HỆ THỐNG (Background Jobs)
 
-### 14.1 Điều kiện thực hiện
+## 13. Báo Cáo Hàng Ngày (Cron Job)
+
+### 13.1 Điều kiện thực hiện
 
 ┌─────────────────────────────────────────────────────────────┐
 │            ĐIỀU KIỆN BÁO CÁO HÀNG NGÀY                     │
@@ -2807,7 +2810,7 @@ function getCommissionRate(level) {
 
 ---
 
-### 14.2 Flow Báo Cáo Hàng Ngày
+### 13.2 Flow Báo Cáo Hàng Ngày
 
 ┌─────────────────────────────────────────────────────────────┐
 │            FLOW BÁO CÁO HÀNG NGÀY (CRON)                   │
@@ -2933,21 +2936,26 @@ function getCommissionRate(level) {
          ├── Loop: for summary in summaries
          │   │
          │   ├── summary.orders > 0 OR summary.items_sold > 0
-         │   │   ──► Add to queue_list
+         │   │   ──► Add to send_list
          │   │
          │   └── Skip shop if no activity
          │
-         └── queue_list (Array)
+         └── send_list (Array)
          │
          ▼
-[B5] Queue daily summary notifications
+[B5] Send daily summary notifications (direct calls)
          │
-         ├── Loop: for summary in queue_list
+         ├── Loop: for summary in send_list
          │   │
-         │   ├── Queue: telegram_notification_queue
-         │   ├── Event: daily_summary
-         │   ├── Priority: low
-         │   ├── Data: summary_data
+         │   ├── Gọi telegram_service.notify_daily_summary() (direct):
+         │   │   ├── chat_id: shop.telegram_chat_id
+         │   │   ├── date: TODAY
+         │   │   ├── revenue: summary.revenue
+         │   │   ├── orders: summary.orders
+         │   │   ├── items_sold: summary.items_sold
+         │   │   │
+         │   ├── On success: Continue
+         │   ├── On error: Log error, continue next
          │   │
          │   └── Continue
          │
@@ -2962,32 +2970,32 @@ function getCommissionRate(level) {
          │   │   {
          │   │     job_name: "daily_summary_report",
          │   │     shops_processed: active_shops.length,
-         │   │     notifications_queued: queue_list.length,
+         │   │     notifications_sent: send_list.length,
          │   │     started_at: start_time,
          │   │     completed_at: DateTime,
          │   │     status: "success",
          │   │     duration_ms: duration
-         │   │   }
+         │   │     }
          │
-         ├── Log: "Daily summary completed: {queue_list.length} notifications queued"
+         ├── Log: "Daily summary completed: {send_list.length} notifications sent"
          │
          └── END
 
 ---
 
-### 14.3 Edge Cases & Error Handling
+### 13.3 Edge Cases & Error Handling
 
 | Case | Condition | Handling | User Message |
 |------|-----------|----------|--------------|
 | No active shops | empty array | Return early | - |
 | No activity | orders = 0 AND items_sold = 0 | Skip shop | - |
 | Query timeout | MongoDB slow query | Log + Retry | - |
-| Queue fail | Redis error | Log | - |
+| Telegram fail | API error | Log only | - |
 | Log fail | MongoDB error | Log to console | - |
 
 ---
 
-# PHẦN 5: TỔNG HỢP TẤT CẢ BIẾN
+# PHẦN 6: TỔNG HỢP TẤT CẢ BIẾN
 
 ## Biến Thực Thể Shop
 
@@ -3056,7 +3064,7 @@ function getCommissionRate(level) {
 # KẾT THÚC TÀI LIỆU
 
 Tài liệu này bao gồm:
-- **14 flows hoàn chỉnh** cho Vendor, Buyer, Admin, và System
+- **13 flows hoàn chỉnh** cho Vendor, Buyer, Admin, và System
 - **Tất cả biến số** với kiểu dữ liệu, nguồn, và mô tả
 - **Tất cả điều kiện** với validation rules
 - **Decision trees chi tiết** với mọi nhánh
@@ -3064,6 +3072,12 @@ Tài liệu này bao gồm:
 - **UI mockups** trong ASCII art format
 - **Database queries** cho từng thao tác
 - **Error handling** và fallback logic
+
+**Telegram Integration:**
+- Sử dụng Rust library (teloxide/frankenstein)
+- Gọi trực tiếp `send_message()` trong code
+- Không cần Queue Worker
+- Xử lý lỗi như log (không ảnh hưởng business logic)
 
 **Tài liệu tham khảo:**
 - [V1 Shop Management](../v1/03-shop-management.md)
