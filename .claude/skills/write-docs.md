@@ -370,6 +370,354 @@ Info:           ℹ️ Info
 
 ---
 
+## 11. Reference System (MANDATORY)
+
+### 11.1 What is the Reference System?
+
+Reference system cho phép:
+- **Link code locations**: Trỏ đến file, function, line cụ thể
+- **Cross-document links**: Reference docs khác
+- **Dependency tracking**: Track dependencies giữa features
+- **Impact analysis**: Biết docs nào bị ảnh hưởng khi code thay đổi
+
+### 11.2 Reference Format (STRICT - PHẢI TUÂN THỦ)
+
+**Format cơ bản:**
+```
+[{TYPE}{ID}@[FILE]?{SECTION}?{LINE}]
+```
+
+**QUAN TRỌNG: MỌI reference PHẢI match với regex patterns trong `docs/refs/_types.yaml`**
+
+**Reference Types:**
+
+| Type | Format | Scope | Example | Description |
+|------|--------|-------|---------|-------------|
+| `[F{num}]` | Flow Step | Local | `[F1]`, `[F2]` | Flow step trong doc hiện tại |
+| `[A{num}]` | Admin Step | Local | `[A1]`, `[A2]` | Admin flow step trong doc hiện tại |
+| `[FILE@...]` | Code File | Global | `[FILE@wallet:service.rs:45]` | Trỏ đến line cụ thể trong code |
+| `[FN@...]` | Function | Global | `[FN@wallet:service.rs::create_deposit]` | Trỏ đến function |
+| `[FIELD@...]` | Field | Global | `[FIELD@Wallet.balance]` | Trỏ đến field trong domain |
+| `[API@...]` | API Endpoint | Global | `[API@POST /api/v1/wallet/deposit]` | Trỏ đến API endpoint |
+| `[DOC@...]` | Document | Global | `[DOC@v2/wallet/deposit:admin-flow]` | Trỏ đến section trong doc khác |
+| `[DEP@...]` | Dependency | Global | `[DEP@wallet]` | Trỏ đến feature dependency |
+| `[TABLE@...]` | Table | Global | `[TABLE@wallets]` | Trỏ đến database collection |
+
+### 11.3 Type Format Validation Rules (STRICT)
+
+**MỌI reference PHẢI tuân thủ format sau (định nghĩa trong `docs/refs/_types.yaml`):**
+
+```yaml
+# Copy từ docs/refs/_types.yaml - PHẢI SYNC khi update
+regex_patterns:
+  # Local references
+  flow_step:     "\\[F([0-9]+)\\]"           # [F1], [F2], [F123]
+  admin_step:    "\\[A([0-9]+)\\]"           # [A1], [A2], [A123]
+
+  # Code references
+  file_ref:      "\\[FILE@([a-z_]+):([a-z_]+\\.rs):([0-9]+)\\]"
+  fn_ref:        "\\[FN@([a-z_]+):([a-z_]+\\.rs)::([a-z_]+)\\]"
+  field_ref:     "\\[FIELD@([A-Z][a-zA-Z0-9]*)\\.([a-z_]+)\\]"
+
+  # API & Docs
+  api_ref:       "\\[API@(GET|POST|PUT|DELETE|PATCH) ([^\\]]+)\\]"
+  doc_ref:       "\\[DOC@([^:]+):([^#]+)#?([^\\]]*)\\]"
+  dep_ref:       "\\[DEP@([a-z_]+)\\]"
+  table_ref:     "\\[TABLE@([a-z_]+)\\]"
+```
+
+**Validation Rules (BẮT BUỘC):**
+
+| Rule | Pattern | Valid | Invalid |
+|------|---------|-------|---------|
+| Flow step | `[F{number}]` | `[F1]`, `[F23]` | `[f1]`, `[F]`, `[F01]` |
+| Admin step | `[A{number}]` | `[A1]`, `[A5]` | `[a1]`, `[A]` |
+| Field ref | `[FIELD@{Struct}.{field}]` | `[FIELD@Wallet.balance]` | `[Field@wallet.balance]`, `[FIELD@wallet.Balance]` |
+| Function ref | `[FN@{module}:{file}::{fn}]` | `[FN@wallet:service.rs::create]` | `[fn@wallet:service.rs::create]` |
+| API ref | `[API@{METHOD} {path}]` | `[API@POST /api/v1/wallet]` | `[api@POST /wallet]` |
+| Dep ref | `[DEP@{feature}]` | `[DEP@wallet]` | `[dep@Wallet]` |
+
+**Naming Conventions:**
+- **Struct names**: PascalCase (`Wallet`, `User`, `Transaction`)
+- **Field names**: snake_case (`balance`, `is_active`, `user_id`)
+- **Module names**: snake_case (`wallet`, `auth`, `shop_management`)
+- **Function names**: snake_case (`create_deposit`, `verify_user`)
+- **Collection names**: snake_case, plural (`wallets`, `users`, `transactions`)
+
+**Pre-Writing Checklist - Reference Validation:**
+
+```
+- [ ] Trước khi viết docs, load docs/refs/_types.yaml
+- [ ] MỌI reference PHẢI match regex pattern
+- [ ] Struct names = PascalCase
+- [ ] Field/module/function names = snake_case
+- [ ] File paths = .rs extension
+- [ ] API methods = UPPERCASE (GET, POST, PUT, DELETE, PATCH)
+- [ ] KHÔNG tạo custom reference format
+- [ ] Nếu cần format mới → PHẢI update _types.yaml trước
+```
+
+### 11.4 Reference Declaration (DECLARE:REF)
+
+KHI TẠO reference mới trong flow, PHẢI declare:
+
+**NOTE: MỌI reference trong declaration PHẢI tuân thủ validation rules ở 11.3**
+
+```
+[DECLARE:REF:F1]
+name: "Create deposit request"
+location:
+  file: src/modules/wallet/service.rs
+  function: create_deposit_request
+  line: 23
+depends_on:
+  - [FIELD@User.id]
+  - [FIELD@Wallet.id]
+affects:
+  - [FIELD@Deposit.status]
+related_docs:
+  - docs/v2/wallet/wallet.md
+```
+
+### 11.4 Using References in Flows
+
+**Example:**
+
+```
+┌─────────────────────────────────────────┐
+│         DEPOSIT FLOW                    │
+└─────────────────────────────────────────┘
+
+[Bước 1] User creates deposit
+         │
+         ├── [REF:DEP@auth]  # Requires auth
+         │
+         ├── Logged in ──► Continue
+         └── Not logged ──► [REF:API@POST /api/v1/auth/login]
+         │
+         ▼
+[Bước 2] Validate amount
+         │
+         ├── [REF:FIELD@Wallet.min_deposit]
+         ├── [REF:FIELD@Wallet.max_deposit]
+         │
+         ├── Valid ──► [REF:F3]
+         └── Invalid ──► Return error
+         │
+         ▼
+[Bước 3] Create deposit transaction
+         │
+[DECLARE:REF:F3]
+name: "Create deposit transaction"
+location:
+  file: src/modules/wallet/service.rs
+  function: create_deposit
+  line: 45
+depends_on:
+  - [FIELD@User.id]
+  - [FIELD@Wallet.id]
+affects:
+  - [FIELD@Deposit.status]
+  - [TABLE@transactions]
+         │
+         ▼
+[ADMIN PARALLEL]
+         │
+         ▼
+[A1] Admin sees pending deposit
+         │
+[DECLARE:REF:A1]
+location:
+  file: src/modules/wallet/handler.rs
+  function: list_pending_deposits
+  line: 120
+         │
+         ├── [REF:DEP@authorization]
+         │
+         ├── Approve ──► [REF:A2]
+         └── Reject ──► [REF:A3]
+```
+
+### 11.5 Using References in Flows
+
+**Example - Flow with proper reference formatting:**
+
+```
+┌─────────────────────────────────────────┐
+│         DEPOSIT FLOW                    │
+└─────────────────────────────────────────┘
+
+[Bước 1] User creates deposit
+         │
+         ├── [REF:DEP@auth]  # Requires auth
+         │
+         ├── Logged in ──► Continue
+         └── Not logged ──► [REF:API@POST /api/v1/auth/login]
+         │
+         ▼
+[Bước 2] Validate amount
+         │
+         ├── [REF:FIELD@Wallet.min_deposit]
+         ├── [REF:FIELD@Wallet.max_deposit]
+         │
+         ├── Valid ──► [REF:F3]
+         └── Invalid ──► Return error
+         │
+         ▼
+[Bước 3] Create deposit transaction
+         │
+[DECLARE:REF:F3]
+name: "Create deposit transaction"
+location:
+  file: src/modules/wallet/service.rs
+  function: create_deposit
+  line: 45
+depends_on:
+  - [FIELD@User.id]
+  - [FIELD@Wallet.id]
+affects:
+  - [FIELD@Deposit.status]
+  - [TABLE@transactions]
+         │
+         ▼
+[ADMIN PARALLEL]
+         │
+         ▼
+[A1] Admin sees pending deposit
+         │
+[DECLARE:REF:A1]
+location:
+  file: src/modules/wallet/handler.rs
+  function: list_pending_deposits
+  line: 120
+         │
+         ├── [REF:DEP@authorization]
+         │
+         ├── Approve ──► [REF:A2]
+         └── Reject ──► [REF:A3]
+```
+
+### 11.6 Pre-Writing Context Check (MANDATORY)
+
+TRƯỚC KHI viết docs, agent PHẢI:
+
+1. **Load `docs/refs/_types.yaml`** - Verify reference format patterns
+2. **Load feature manifest** từ `docs/refs/features/{feature}.yaml`
+3. **Resolve dependencies** - Load manifests của dependencies
+4. **Build context map**
+5. **SHOW context to user** trước khi viết
+
+**Context Output Format:**
+
+```
+╔═══════════════════════════════════════════════╗
+║  FEATURE CONTEXT: {feature_name}              ║
+╠═══════════════════════════════════════════════╣
+║  Type: {feature_type} (resource/transaction/..)║
+║  Version: {v1/v2}                              ║
+╠═══════════════════════════════════════════════╣
+║  REQUIRED DEPENDENCIES:                        ║
+║  ├─ auth (verify ownership)                    ║
+║  │   └─ [FN@auth:service.rs::verify_user]     ║
+║  ├─ user_profile (get user info)               ║
+║  │   └─ [FIELD@User.id]                       ║
+║  └─ wallet (check balance)                     ║
+║      └─ [FIELD@Wallet.balance]                ║
+╠═══════════════════════════════════════════════╣
+║  AFFECTS FEATURES:                             ║
+║  ├─ order (escrow logic) [BLOCKING]            ║
+║  │   └─ [FN@wallet:service.rs::lock_funds]    ║
+║  └─ shop (commission) [CRITICAL]               ║
+║      └─ [FN@shop:service.rs::calculate_commission]║
+╠═══════════════════════════════════════════════╣
+║  RELATED DOCS:                                 ║
+║  ├─ docs/v2/wallet/escrow.md                   ║
+║  └─ docs/v1/06-wallet-payment.md               ║
+╠═══════════════════════════════════════════════╣
+║  CODE FILES:                                   ║
+║  ├─ src/modules/wallet/domain.rs              ║
+║  ├─ src/modules/wallet/service.rs             ║
+║  └─ src/modules/wallet/handler.rs             ║
+╚═══════════════════════════════════════════════╝
+
+Continue to write docs? (y/n)
+```
+
+### 11.7 Reference Resolution Priority
+
+Khi agent encounter `[REF:...]`, resolution theo thứ tự:
+
+1. **Local declaration** - Check `[DECLARE:REF:...]` trong current doc
+2. **Local registry** - Check `{doc}._refs.yaml`
+3. **Global registry** - Check `docs/refs/_registry.yaml`
+4. **Feature manifest** - Check `docs/refs/features/{name}.yaml`
+5. **Code search** - Fallback: search trong codebase
+
+### 11.8 Creating Per-Document Reference Registry
+
+SAU KHI viết docs xong, PHẢI tạo `{doc}._refs.yaml`:
+
+```yaml
+# docs/v2/wallet/deposit._refs.yaml
+document: docs/v2/wallet/deposit.md
+version: v2.0
+updated_at: 2026-01-04
+
+local_refs:
+  F1:
+    name: "Create deposit request"
+    location:
+      file: src/modules/wallet/service.rs
+      function: create_deposit_request
+      line: 23
+    depends_on:
+      - [FIELD@User.id]
+      - [FIELD@Wallet.id]
+    affects:
+      - [FIELD@Deposit.status]
+
+external_refs:
+  - [DEP@auth]
+  - [DEP@authorization]
+  - [FIELD@Wallet.balance]
+  - [API@POST /api/v1/wallet/deposit]
+
+related_features:
+  - payment
+  - authorization
+```
+
+### 11.9 Reference Examples
+
+**Cross-document reference:**
+```markdown
+[Bước 2] Verify user has wallet
+         │
+         ├── [REF:DOC@v2/wallet/wallet.md#create-wallet]
+         │
+         ├── Has wallet ──► Continue
+         └── No wallet ──► [REF:F3] Create wallet
+```
+
+**API endpoint reference:**
+```markdown
+[Bước 1] User submits deposit request via [API@POST /api/v1/wallet/deposit]
+         │
+         ▼
+[Bước 2] Handler validates request [FN@wallet:handler.rs::create_deposit]
+```
+
+**Field impact tracking:**
+```markdown
+⚠️ IMPORTANT: This step affects [FIELD@Wallet.balance]
+Any change to this field will impact:
+  - Order placement (check balance)
+  - Purchase flow (deduct balance)
+  - Withdrawal (check available balance)
+```
+
+---
+
 ## 7. Checklist (Flow Completeness)
 
 ### 7.1 Pre-Writing Checklist

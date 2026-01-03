@@ -35,7 +35,8 @@
       "Bash(python3:*)",
       "Bash(pkill:*)",
       "Skill(superpowers:writing-skills)",
-      "Skill(superpowers:writing-skills:*)"
+      "Skill(superpowers:writing-skills:*)",
+      "Bash(tree:*)"
     ]
   }
 }

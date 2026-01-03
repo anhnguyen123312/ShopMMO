@@ -1,0 +1,114 @@
+# Reference Type Definitions
+# Định nghĩa các loại reference và cách resolution
+
+reference_types:
+  # Flow Steps (Local scope)
+  F:
+    name: "Flow Step"
+    format: "[F{number}]"
+    scope: local
+    example: "[F1]", "[F2]", "[F3]"
+    resolves_to: "Flow step declaration in same document"
+    usage: "Main flow steps in user flows"
+
+  A:
+    name: "Admin Flow Step"
+    format: "[A{number}]"
+    scope: local
+    example: "[A1]", "[A2]", "[A3]"
+    resolves_to: "Admin flow step in same document"
+    usage: "Admin-only flow steps"
+
+  # Code References (Global scope)
+  FILE:
+    name: "Code File Reference"
+    format: "[FILE@{module}:{file}:{line}]"
+    scope: global
+    example: "[FILE@wallet:service.rs:45]"
+    resolves_to: "Specific line in code file"
+    usage: "Direct reference to code location"
+
+  FN:
+    name: "Function Reference"
+    format: "[FN@{module}:{file}::{function}]"
+    scope: global
+    example: "[FN@wallet:service.rs::create_deposit]"
+    resolves_to: "Function definition with location"
+    usage: "Reference to specific function"
+
+  FIELD:
+    name: "Field Reference"
+    format: "[FIELD@{Struct}.{field}]"
+    scope: global
+    example: "[FIELD@Wallet.balance]", "[FIELD@User.is_active]"
+    resolves_to: "Field definition in domain.rs"
+    usage: "Reference to struct/field in domain models"
+
+  API:
+    name: "API Endpoint Reference"
+    format: "[API@{METHOD} {path}]"
+    scope: global
+    example: "[API@POST /api/v1/wallet/deposit]"
+    resolves_to: "Handler function + Service function"
+    usage: "Reference to HTTP endpoint"
+
+  # Documentation References (Global scope)
+  DOC:
+    name: "Document Section Reference"
+    format: "[DOC@{doc_path}:{section}#{anchor}]"
+    scope: global
+    example: "[DOC@v2/wallet/deposit:admin-flow]"
+    resolves_to: "Section in another document"
+    usage: "Cross-reference between documentation files"
+
+  DEP:
+    name: "Feature Dependency Reference"
+    format: "[DEP@{feature_name}]"
+    scope: global
+    example: "[DEP@wallet]", "[DEP@authorization]"
+    resolves_to: "Feature manifest in docs/refs/features/"
+    usage: "Reference to feature dependency"
+
+  TABLE:
+    name: "Database Table Reference"
+    format: "[TABLE@{collection_name}]"
+    scope: global
+    example: "[TABLE@wallets]", "[TABLE@transactions]"
+    resolves_to: "MongoDB collection schema"
+    usage: "Reference to database collection"
+
+# Reference resolution priority order
+resolution_order:
+  1. local_declaration     # Check [DECLARE:REF:F1] in current doc
+  2. local_registry        # Check {doc}._refs.yaml
+  3. global_registry       # Check docs/refs/_registry.yaml
+  4. feature_manifest      # Check docs/refs/features/{name}.yaml
+  5. code_search           # Fallback: search in codebase
+
+# Reference declaration format
+declaration_format: |
+  [DECLARE:REF:{ID}]
+  name: "Human readable name"
+  location:
+    file: path/to/file.rs
+    function: function_name  # optional
+    line: 123
+  depends_on:
+    - [REF:TYPE@value]
+    - [REF:FIELD@Struct.field]
+  affects:
+    - [REF:FIELD@Another.field]
+  related_docs:
+    - path/to/other/doc.md
+
+# Reference regex patterns for parsing
+regex_patterns:
+  flow_step: "\\[F([0-9]+)\\]"
+  admin_step: "\\[A([0-9]+)\\]"
+  file_ref: "\\[FILE@([a-z_]+):([a-z_]+\\.rs):([0-9]+)\\]"
+  function_ref: "\\[FN@([a-z_]+):([a-z_]+\\.rs)::([a-z_]+)\\]"
+  field_ref: "\\[FIELD@([A-Z][a-zA-Z0-9]*)\\.([a-z_]+)\\]"
+  api_ref: "\\[API@(GET|POST|PUT|DELETE|PATCH) ([^\\]]+)\\]"
+  doc_ref: "\\[DOC@([^:]+):([^#]+)#?([^\]]*)\\]"
+  dep_ref: "\\[DEP@([a-z_]+)\\]"
+  table_ref: "\\[TABLE@([a-z_]+)\\]"
