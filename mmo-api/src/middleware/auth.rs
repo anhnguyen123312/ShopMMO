@@ -21,6 +21,7 @@ use crate::{config::AppConfig, core::ApiError, utils::jwt};
 ///
 /// # V2 Updates
 /// - Added `roles` array for multiple role support
+/// - Added `username` field
 /// - Added `perm_version` for cache invalidation
 /// - Kept `role` for backward compatibility (primary role)
 #[derive(Debug, Clone)]
@@ -31,6 +32,9 @@ pub struct AuthUser {
     /// User's wallet ID (from JWT)
     pub wallet_id: String,
 
+    /// User's username (from JWT)
+    pub username: String,
+
     /// User's email (from JWT)
     pub email: String,
 
@@ -38,7 +42,7 @@ pub struct AuthUser {
     /// Kept for backward compatibility
     pub role: String,
 
-    /// All roles assigned to the user (V2)
+    /// All roles assigned to user (V2)
     pub roles: Vec<String>,
 
     /// Permission version for cache invalidation (V2)
@@ -54,10 +58,13 @@ pub struct AdminUser {
     /// Admin's wallet ID
     pub wallet_id: String,
 
+    /// Admin's username
+    pub username: String,
+
     /// Admin's email
     pub email: String,
 
-    /// Admin's primary role
+    /// Admin's role
     pub role: String,
 
     /// All admin roles
@@ -165,6 +172,7 @@ where
             let auth_user = AuthUser {
                 user_id: claims.sub.clone(),
                 wallet_id: claims.wallet_id.clone(),
+                username: claims.username.clone(),
                 email: claims.email.clone(),
                 role: claims.role.clone(),
                 roles,
@@ -215,21 +223,17 @@ impl actix_web::FromRequest for AdminUser {
         _: &mut actix_web::dev::Payload,
     ) -> Self::Future {
         match req.extensions().get::<AuthUser>() {
-            Some(user) => {
-                // Check if user has admin role (check both primary role and roles array)
-                let is_admin = user.role == "ADMIN"
-                    || user.role == "SUPER_ADMIN"
-                    || user.roles.contains(&"ADMIN".to_string())
-                    || user.roles.contains(&"SUPER_ADMIN".to_string());
-
+            Some(auth_user) => {
+                let is_admin = auth_user.role == "ADMIN" || auth_user.role == "SUPER_ADMIN";
                 if is_admin {
                     ready(Ok(AdminUser {
-                        user_id: user.user_id.clone(),
-                        wallet_id: user.wallet_id.clone(),
-                        email: user.email.clone(),
-                        role: user.role.clone(),
-                        roles: user.roles.clone(),
-                        perm_version: user.perm_version,
+                        user_id: auth_user.user_id.clone(),
+                        wallet_id: auth_user.wallet_id.clone(),
+                        username: auth_user.username.clone(),
+                        email: auth_user.email.clone(),
+                        role: auth_user.role.clone(),
+                        roles: auth_user.roles.clone(),
+                        perm_version: auth_user.perm_version,
                     }))
                 } else {
                     ready(Err(ErrorUnauthorized(
@@ -242,19 +246,4 @@ impl actix_web::FromRequest for AdminUser {
             ))),
         }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use actix_web::{test, web, App, HttpResponse};
-
-    async fn test_handler(auth: AuthUser) -> HttpResponse {
-        HttpResponse::Ok().json(serde_json::json!({
-            "user_id": auth.user_id,
-            "email": auth.email,
-        }))
-    }
-
-    // Note: Full integration tests require setting up test server with valid JWT
 }

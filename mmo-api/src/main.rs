@@ -72,13 +72,14 @@ async fn main() -> std::io::Result<()> {
     let token_repo = Arc::new(modules::auth::RefreshTokenRepository::new(mongodb.clone()));
     let wallet_repo = Arc::new(modules::wallet::WalletRepository::new(mongodb.clone()));
 
-    // Initialize services
+    // Initialize services (wallet before auth since auth depends on wallet)
+    let wallet_service = Arc::new(modules::wallet::WalletService::new(wallet_repo));
     let auth_service = Arc::new(modules::auth::AuthService::new(
         user_repo,
         token_repo,
         Arc::new(config.clone()),
+        Some(wallet_service.clone()),
     ));
-    let wallet_service = Arc::new(modules::wallet::WalletService::new(wallet_repo));
     let permission_service = Arc::new(modules::permissions::service::PermissionService::new(
         mongodb.database().clone(),
     ));

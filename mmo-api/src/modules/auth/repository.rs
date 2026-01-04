@@ -122,6 +122,35 @@ impl UserRepository {
         Ok(count > 0)
     }
 
+    /// Checks if username exists
+    ///
+    /// # Arguments
+    /// * `username` - Username to check
+    ///
+    /// # Returns
+    /// * `Result<bool, DbError>` - True if exists
+    pub async fn username_exists(&self, username: &str) -> Result<bool, DbError> {
+        let count = self
+            .collection
+            .count_documents(doc! { "username": username })
+            .await?;
+        Ok(count > 0)
+    }
+
+    /// Finds user by username
+    ///
+    /// # Arguments
+    /// * `username` - User's username
+    ///
+    /// # Returns
+    /// * `Result<Option<User>, DbError>` - User if found
+    pub async fn find_by_username(&self, username: &str) -> Result<Option<User>, DbError> {
+        self.collection
+            .find_one(doc! { "username": username })
+            .await
+            .map_err(DbError::from)
+    }
+
     /// Updates user roles
     ///
     /// # Arguments

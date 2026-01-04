@@ -16,6 +16,7 @@ use super::{
     dto::*,
     repository::{RefreshTokenRepository, UserRepository},
 };
+use crate::modules::wallet::{WalletService, domain::WalletType};
 
 /// Authentication service
 #[derive(Clone)]
@@ -23,6 +24,7 @@ pub struct AuthService {
     user_repo: Arc<UserRepository>,
     token_repo: Arc<RefreshTokenRepository>,
     config: Arc<AppConfig>,
+    wallet_service: Option<Arc<WalletService>>,
 }
 
 impl AuthService {
@@ -30,11 +32,13 @@ impl AuthService {
         user_repo: Arc<UserRepository>,
         token_repo: Arc<RefreshTokenRepository>,
         config: Arc<AppConfig>,
+        wallet_service: Option<Arc<WalletService>>,
     ) -> Self {
         Self {
             user_repo,
             token_repo,
             config,
+            wallet_service,
         }
     }
 
@@ -53,23 +57,61 @@ impl AuthService {
             ));
         }
 
+        // Check if username already exists
+        if self.user_repo.username_exists(&req.username).await.map_err(|e| ServiceError::DatabaseError(e.to_string()))? {
+            return Err(ServiceError::ValidationFailed(
+                "Username already taken".to_string(),
+            ));
+        }
+
         // Hash password
         let password_hash = hash_password(&req.password, Some(self.config.security.bcrypt_cost))
             .map_err(|e| ServiceError::InternalError(format!("Failed to hash password: {}", e)))?;
 
-        // Create user with default BUYER role
-        let user = User::new(req.email, password_hash, req.name, Some("BUYER".to_string()), None);
+        // Create user with default BUYER role and PendingVerification status
+        let user = User::new(
+            req.username,
+            req.email,
+            password_hash,
+            req.name,
+            Some("BUYER".to_string()),
+            None,
+        );
         let created_user = self
             .user_repo
             .create(user)
             .await
             .map_err(|e| ServiceError::DatabaseError(e.to_string()))?;
 
+        // Create wallet automatically
+        let user_id = created_user.id.unwrap().to_hex();
+        if let Some(wallet_service) = &self.wallet_service {
+            let wallet_id = format!("WLT-{}", user_id);
+            match wallet_service.create_wallet(user_id.clone(), WalletType::User).await {
+                Ok(wallet) => {
+                    tracing::info!(
+                        user_id = %user_id,
+                        wallet_id = %wallet.wallet_id,
+                        "Wallet created automatically for new user"
+                    );
+                }
+                Err(e) => {
+                    // Log warning but don't fail registration
+                    tracing::warn!(
+                        user_id = %user_id,
+                        error = %e,
+                        "Failed to create wallet during registration - user created without wallet"
+                    );
+                }
+            }
+        }
+
         // Generate tokens
         let auth_response = self.generate_tokens(&created_user, None, None).await?;
 
         tracing::info!(
             user_id = %created_user.id.unwrap().to_hex(),
+            username = %created_user.username,
             email = %created_user.email,
             "User registered successfully"
         );
@@ -92,13 +134,21 @@ impl AuthService {
         ip_address: Option<String>,
         user_agent: Option<String>,
     ) -> Result<AuthResponse, ServiceError> {
-        // Find user by email
-        let user = self
-            .user_repo
-            .find_by_email(&req.email)
-            .await
-            .map_err(|e| ServiceError::DatabaseError(e.to_string()))?
-            .ok_or_else(|| ServiceError::ValidationFailed("Invalid credentials".to_string()))?;
+        // Determine if identifier is email (contains @) or username
+        let user = if req.identifier.contains('@') {
+            // Try email
+            self.user_repo
+                .find_by_email(&req.identifier)
+                .await
+                .map_err(|e| ServiceError::DatabaseError(e.to_string()))?
+        } else {
+            // Try username
+            self.user_repo
+                .find_by_username(&req.identifier)
+                .await
+                .map_err(|e| ServiceError::DatabaseError(e.to_string()))?
+        }
+        .ok_or_else(|| ServiceError::ValidationFailed("Invalid credentials".to_string()))?;
 
         // Verify password
         let is_valid = verify_password(&req.password, &user.password_hash)
@@ -130,6 +180,7 @@ impl AuthService {
 
         tracing::info!(
             user_id = %user.id.unwrap().to_hex(),
+            username = %user.username,
             email = %user.email,
             "User logged in successfully"
         );
@@ -275,6 +326,7 @@ impl AuthService {
             &user_id,
             &wallet_id,
             &user.email,
+            &user.username,
             roles.clone(),
             perm_version,
             &self.config.jwt.secret,
@@ -287,6 +339,7 @@ impl AuthService {
             &user_id,
             &wallet_id,
             &user.email,
+            &user.username,
             roles,
             perm_version,
             &self.config.jwt.secret,

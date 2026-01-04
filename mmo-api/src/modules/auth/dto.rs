@@ -10,6 +10,11 @@ use utoipa::ToSchema;
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterRequest {
+    /// User's unique username
+    #[validate(length(min = 3, max = 30, message = "Username must be 3-30 characters"))]
+    #[schema(example = "johndoe123", min_length = 3, max_length = 30)]
+    pub username: String,
+
     /// User's email
     #[validate(email(message = "Invalid email format"))]
     #[schema(example = "user@example.com")]
@@ -30,10 +35,10 @@ pub struct RegisterRequest {
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
-    /// User's email
-    #[validate(email(message = "Invalid email format"))]
-    #[schema(example = "user@example.com")]
-    pub email: String,
+    /// User's username or email
+    #[validate(length(min = 1, message = "Username or email is required"))]
+    #[schema(example = "johndoe123")]
+    pub identifier: String,
 
     /// User's password
     #[validate(length(min = 1, message = "Password is required"))]
@@ -97,6 +102,10 @@ pub struct UserResponse {
     #[schema(example = "60f1b5b5b5b5b5b5b5b5b5b5")]
     pub id: String,
 
+    /// User's username
+    #[schema(example = "johndoe123")]
+    pub username: String,
+
     /// User's email
     #[schema(example = "user@example.com")]
     pub email: String,
@@ -120,6 +129,7 @@ impl From<crate::modules::auth::domain::User> for UserResponse {
     fn from(user: crate::modules::auth::domain::User) -> Self {
         Self {
             id: user.id.unwrap().to_hex(),
+            username: user.username,
             email: user.email,
             name: user.name,
             role: user.role,
@@ -171,6 +181,9 @@ pub struct AssignRoleRequest {
 pub struct UserRolesResponse {
     /// User ID
     pub id: String,
+
+    /// User's username
+    pub username: String,
 
     /// User's email
     pub email: String,

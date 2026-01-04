@@ -12,6 +12,9 @@ pub struct User {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
 
+    /// User's username (unique)
+    pub username: String,
+
     /// User's email (unique)
     pub email: String,
 
@@ -54,12 +57,12 @@ pub struct User {
 pub enum UserStatus {
     Active,
     Suspended,
-    Inactive,
+    PendingVerification,
 }
 
 impl Default for UserStatus {
     fn default() -> Self {
-        Self::Active
+        Self::PendingVerification
     }
 }
 
@@ -96,24 +99,26 @@ impl User {
     /// Creates a new user
     ///
     /// # Arguments
+    /// * `username` - User's unique username
     /// * `email` - User's email
     /// * `password_hash` - Hashed password
     /// * `name` - User's display name
     /// * `role` - User's primary role (default: "BUYER")
     /// * `roles` - Optional array of additional roles
-    pub fn new(email: String, password_hash: String, name: String, role: Option<String>, roles: Option<Vec<String>>) -> Self {
+    pub fn new(username: String, email: String, password_hash: String, name: String, role: Option<String>, roles: Option<Vec<String>>) -> Self {
         let now = DateTime::now();
         let default_role = role.unwrap_or_else(|| "BUYER".to_string());
         let default_roles = roles.unwrap_or_else(|| vec![default_role.clone()]);
         Self {
             id: None,
+            username,
             email,
             password_hash,
             name,
             role: default_role,
             roles: default_roles,
             perm_version: 1,
-            status: UserStatus::Active,
+            status: UserStatus::PendingVerification,
             email_verified: false,
             last_login_at: None,
             created_at: now,

@@ -10,7 +10,7 @@ use crate::core::ApiError;
 
 /// JWT token claims
 ///
-/// Contains the standard JWT claims plus custom user information.
+/// Contains to standard JWT claims plus custom user information.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TokenClaims {
     /// Subject (user ID)
@@ -19,6 +19,10 @@ pub struct TokenClaims {
     /// User's wallet ID (kept for backward compatibility)
     #[serde(default)]
     pub wallet_id: String,
+
+    /// User's username (V2)
+    #[serde(default)]
+    pub username: String,
 
     /// User email (kept for backward compatibility)
     pub email: String,
@@ -85,6 +89,7 @@ pub fn generate_access_token(
     let claims = TokenClaims {
         sub: user_id.to_string(),
         wallet_id: wallet_id.to_string(),
+        username: String::new(), // Empty for legacy
         email: email.to_string(),
         role: role.to_string(),
         roles: vec![role.to_string()], // Also populate roles array
@@ -108,6 +113,7 @@ pub fn generate_access_token(
 /// * `user_id` - User's MongoDB ObjectId as string
 /// * `wallet_id` - User's wallet ID
 /// * `email` - User's email
+/// * `username` - User's username
 /// * `roles` - Array of role names (e.g., ["buyer", "seller"])
 /// * `perm_version` - Permission version for cache invalidation
 /// * `secret` - JWT secret key
@@ -119,6 +125,7 @@ pub fn generate_access_token_v2(
     user_id: &str,
     wallet_id: &str,
     email: &str,
+    username: &str,
     roles: Vec<String>,
     perm_version: u32,
     secret: &str,
@@ -127,12 +134,13 @@ pub fn generate_access_token_v2(
     let now = Utc::now();
     let exp = now + Duration::minutes(expires_in_minutes);
 
-    // For backward compatibility, set role to the first/highest priority role
+    // For backward compatibility, set role to first/highest priority role
     let primary_role = roles.first().unwrap_or(&String::from("user")).clone();
 
     let claims = TokenClaims {
         sub: user_id.to_string(),
         wallet_id: wallet_id.to_string(),
+        username: username.to_string(),
         email: email.to_string(),
         role: primary_role,
         roles,
@@ -188,6 +196,7 @@ pub fn generate_refresh_token(
     let claims = TokenClaims {
         sub: user_id.to_string(),
         wallet_id: wallet_id.to_string(),
+        username: String::new(), // Empty for legacy
         email: email.to_string(),
         role: role.to_string(),
         roles: vec![role.to_string()],
@@ -211,6 +220,7 @@ pub fn generate_refresh_token(
 /// * `user_id` - User's MongoDB ObjectId as string
 /// * `wallet_id` - User's wallet ID
 /// * `email` - User's email
+/// * `username` - User's username
 /// * `roles` - Array of role names
 /// * `perm_version` - Permission version
 /// * `secret` - JWT secret key
@@ -222,6 +232,7 @@ pub fn generate_refresh_token_v2(
     user_id: &str,
     wallet_id: &str,
     email: &str,
+    username: &str,
     roles: Vec<String>,
     perm_version: u32,
     secret: &str,
@@ -235,6 +246,7 @@ pub fn generate_refresh_token_v2(
     let claims = TokenClaims {
         sub: user_id.to_string(),
         wallet_id: wallet_id.to_string(),
+        username: username.to_string(),
         email: email.to_string(),
         role: primary_role,
         roles,
@@ -313,6 +325,20 @@ pub fn parse_duration(duration_str: &str) -> i64 {
     }
 }
 
+/// Helper to add days to current timestamp
+///
+/// # Arguments
+/// * `days` - Number of days to add
+///
+/// # Returns
+/// * `bson::DateTime` - New datetime
+pub fn add_days(days: i64) -> bson::DateTime {
+    use chrono::Duration;
+    let now = Utc::now();
+    let new_time = now + Duration::days(days);
+    bson::DateTime::from_millis(new_time.timestamp_millis())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -346,6 +372,7 @@ mod tests {
             "507f1f77bcf86cd799439011",
             "WLT-507f1f77bcf86cd799439011",
             "test@example.com",
+            "testuser123",
             roles.clone(),
             5,
             TEST_SECRET,
@@ -357,6 +384,7 @@ mod tests {
         assert_eq!(claims.sub, "507f1f77bcf86cd799439011");
         assert_eq!(claims.wallet_id, "WLT-507f1f77bcf86cd799439011");
         assert_eq!(claims.email, "test@example.com");
+        assert_eq!(claims.username, "testuser123");
         assert_eq!(claims.role, "buyer"); // Primary role
         assert_eq!(claims.roles, roles);
         assert_eq!(claims.perm_version, 5);
@@ -368,6 +396,7 @@ mod tests {
         let claims = TokenClaims {
             sub: "user123".to_string(),
             wallet_id: "WLT-user123".to_string(),
+            username: "testuser".to_string(),
             email: "user@example.com".to_string(),
             role: "seller".to_string(),
             roles: vec!["buyer".to_string(), "seller".to_string()],
@@ -382,6 +411,7 @@ mod tests {
         assert!(claims.roles.contains(&"seller".to_string()));
         assert_eq!(claims.perm_version, 5);
         assert_eq!(claims.role, "seller");
+        assert_eq!(claims.username, "testuser");
     }
 
     #[test]

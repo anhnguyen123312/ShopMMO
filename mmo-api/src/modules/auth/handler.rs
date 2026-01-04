@@ -156,6 +156,7 @@ pub async fn logout(
 pub async fn get_me(auth: AuthUser) -> Result<HttpResponse, ApiError> {
     Ok(HttpResponse::Ok().json(ApiResponse::success(serde_json::json!({
         "user_id": auth.user_id,
+        "username": auth.username,
         "email": auth.email,
         "role": auth.role,
     }))))
@@ -277,6 +278,7 @@ pub async fn get_user_roles(
 
     let response = UserRolesResponse {
         id: user.id.unwrap().to_hex(),
+        username: user.username,
         email: user.email,
         name: user.name,
         role: user.role.clone(),
