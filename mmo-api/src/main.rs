@@ -71,6 +71,7 @@ async fn main() -> std::io::Result<()> {
     let user_repo = Arc::new(modules::auth::UserRepository::new(mongodb.clone()));
     let token_repo = Arc::new(modules::auth::RefreshTokenRepository::new(mongodb.clone()));
     let wallet_repo = Arc::new(modules::wallet::WalletRepository::new(mongodb.clone()));
+    let category_repo = Arc::new(modules::category::CategoryRepository::new(mongodb.clone()));
 
     // Initialize services (wallet before auth since auth depends on wallet)
     let wallet_service = Arc::new(modules::wallet::WalletService::new(wallet_repo));
@@ -88,6 +89,7 @@ async fn main() -> std::io::Result<()> {
     let permission_service = Arc::new(modules::permissions::service::PermissionService::new(
         mongodb.database().clone(),
     ));
+    let category_service = Arc::new(modules::category::CategoryService::new(category_repo));
 
     // Server address
     let server_host = config.server.host.clone();
@@ -110,6 +112,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(wallet_service.clone()))
             .app_data(web::Data::new(wallet_cron_manager.clone()))
             .app_data(web::Data::new(permission_service.clone()))
+            .app_data(web::Data::new(category_service.clone()))
             .app_data(web::Data::from(Arc::new(config.clone())))
             // Health check endpoint
             .route("/health", web::get().to(health_check))
@@ -118,6 +121,7 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/api")
                     // Public routes
                     .configure(modules::auth::routes::configure)
+                    .configure(modules::category::routes::configure)
                     // Protected routes (require authentication)
                     .service(
                         web::scope("")

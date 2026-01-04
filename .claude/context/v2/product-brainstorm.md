@@ -12,14 +12,15 @@ Quản lý sản phẩm và tồn kho cho P2PMMO V2 - Cho phép vendors tạo, q
 - ✅ Bulk inventory upload (paste text hoặc upload file)
 - ✅ Pre-order support với auto-fulfill khi restock
 - ✅ Real-time stock tracking
-- ✅ Encrypted content cho product items
+- ✅ Per-category collections cho inventory (NO encryption, plain text storage)
 
 ### V2 Key Features Required
 1. **Product Management**: Create, Update, Hide, Delete products
-2. **Inventory Upload**: Bulk upload với duplicate check
-3. **Stock Management**: Real-time tracking, restock, view sold/unsold
-4. **Pre-order**: Auto-fulfill khi restock
-5. **Search & Filter**: Public search, shop products, category filters
+2. **Inventory Upload**: Bulk upload với duplicate check (NO encryption, store plain text)
+3. **Per-Category Collections**: Mỗi category có 1 collection riêng trong MongoDB
+4. **Stock Management**: Real-time tracking, restock, view sold/unsold
+5. **Pre-order**: Auto-fulfill khi restock
+6. **Search & Filter**: Public search, shop products, category filters
 
 ---
 
@@ -204,7 +205,7 @@ require_2fa: bool (default false)
   - Or upload .txt file (max 10MB)
   - View duplicate check results (4 levels)
   - Confirm upload
-  - See items encrypted & inserted
+  - Items stored in category collection (plain text, NO encryption)
   - Stock updated
   - Pre-orders auto-fulfilled
 
@@ -219,19 +220,19 @@ require_2fa: bool (default false)
 **Duplicate Check Levels:**
 ```rust
 Level 1: Within current product (WARNING)
-  → Check: content_hash exists in product_id?
+  → Check: content exists in product_id?
   → Action: Warn, allow upload
 
 Level 2: Within current shop (WARNING)
-  → Check: content_hash exists in shop_id?
+  → Check: content exists in shop_id?
   → Action: Warn, allow upload
 
 Level 3: Platform SOLD items (BLOCK)
-  → Check: content_hash exists where is_sold = true?
+  → Check: content exists where is_sold = true?
   → Action: BLOCK, show which product sold it
 
 Level 4: Platform UNSOLD items (BLOCK)
-  → Check: content_hash exists where is_sold = false?
+  → Check: content exists where is_sold = false?
   → Action: BLOCK, show which product has it
 ```
 
@@ -246,25 +247,43 @@ account|password|backup_code
 - Split by newline
 - Trim whitespace
 - Remove empty lines
-- Encrypt each item
-- Hash for duplicate check
+- Store as plain text (NO encryption)
+- Check duplicates by exact content match
 ```
 
-**Encryption:**
+**Storage Strategy:**
 ```rust
+// Per-Category Collections
+// Each category has its own collection in MongoDB
+// Collection naming: inventory_{category_slug}
+
+// Example:
+// Category: "Netflix Accounts" (slug: netflix-accounts)
+// Collection: inventory_netflix_accounts
+
 // For each item:
-1. content = user_input
-2. content_hash = SHA256(content)
-3. encrypted_content = encrypt(content, encryption_key)
-4. Store: product_id, encrypted_content, content_hash, is_sold: false
+1. content = user_input (plain text)
+2. collection_name = "inventory_{category_slug}"
+3. Store in collection:
+   {
+     _id: ObjectId,
+     product_id: ObjectId,
+     shop_id: ObjectId,
+     content: "plain text content",
+     is_sold: false,
+     order_id: null,
+     hold_until: null,
+     sold_at: null,
+     created_at: DateTime
+   }
 ```
 
 **Related Files:**
-- domain.rs: ProductItem, Product
+- domain.rs: ProductItem (generic), Product, Category
 - dto.rs: UploadInventoryRequest, DuplicateCheckResponse
 - handler.rs: upload_inventory_handler, check_duplicates_handler
-- service.rs: parse_inventory, check_duplicates_4_levels, encrypt_items, insert_items, auto_fulfill_preorders
-- repository.rs: find_duplicate_items, insert_product_items, update_product_stock, find_pending_preorders
+- service.rs: parse_inventory, check_duplicates_4_levels, insert_items, auto_fulfill_preorders
+- repository.rs: find_duplicate_items, insert_product_items, get_category_collection, update_product_stock, find_pending_preorders
 
 ---
 
@@ -517,18 +536,18 @@ if has_active_orders(product_id) && price_changed {
                   │ product     │  │ BLOCK with  │  │ = NOW()     │
                   │ info        │  │ reason      │  │ Keep data   │
                   └─────────────┘  └─────────────┘  │ 30 days     │
-                                                        └─────┬──────┘
-                                                              │
-                                                              ▼
-                                                  ┌───────────────────┐
-                                                  │ CLEANUP (CRON)    │
-                                                  │ ───────────────── │
-                                                  │ After 30 days:    │
-                                                  │ • Hard delete     │
-                                                  │ • Delete items    │
-                                                  │ • Delete from     │
-                                                  │   search index    │
-                                                  └───────────────────┘
+                                                    └─────┬──────┘
+                                                          │
+                                                          ▼
+                                              ┌───────────────────┐
+                                              │ CLEANUP (CRON)    │
+                                              │ ───────────────── │
+                                              │ After 30 days:    │
+                                              │ • Hard delete     │
+                                              │ • Delete items    │
+                                              │ • Delete from     │
+                                              │   search index    │
+                                              └───────────────────┘
 
   ADMIN VIEW:
     ┌──────────┐    ┌──────────┐    ┌──────────┐
@@ -1138,7 +1157,8 @@ Based on the V2 Full Flows document, here are potential improvements to consider
 
 These are already planned in V2:
 - ✅ Module-based architecture
-- ✅ Encrypted product items
+- ✅ Plain text inventory storage (NO encryption)
+- ✅ Per-category collections for inventory
 - ✅ 4-level duplicate check
 - ✅ Bulk upload (paste/file)
 - ✅ Auto-fulfill pre-orders
@@ -1146,7 +1166,7 @@ These are already planned in V2:
 - ✅ Real-time stock tracking
 - ✅ Search & filter products
 - ✅ Inventory management (unsold/sold/on hold tabs)
-- ✅ Masked content for sold items
+- ✅ Masked content for sold items (view only)
 
 ---
 

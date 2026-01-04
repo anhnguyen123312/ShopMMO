@@ -47,6 +47,8 @@ impl utoipa::Modify for SecurityAddon {
         (name = "Wallet - User", description = "User-facing wallet endpoints (V1)"),
         (name = "Wallet - Admin", description = "Admin wallet management endpoints (V1)"),
         (name = "Permissions", description = "Permission and role management endpoints"),
+        (name = "Categories - Public", description = "Public category endpoints"),
+        (name = "Categories - Admin", description = "Admin category management endpoints"),
         (name = "Shop - Vendor", description = "Vendor shop management endpoints (V2)"),
         (name = "Shop - Public", description = "Public shop endpoints (V2)"),
         (name = "Shop - Admin", description = "Admin shop management endpoints (V2)"),
@@ -109,6 +111,14 @@ impl utoipa::Modify for SecurityAddon {
         crate::modules::permissions::handler::update_role_permissions,
         crate::modules::permissions::handler::delete_role,
         crate::modules::permissions::handler::assign_role,
+
+        // Category endpoints
+        crate::modules::category::handler::create_category,
+        crate::modules::category::handler::get_category,
+        crate::modules::category::handler::list_categories_tree,
+        crate::modules::category::handler::update_category,
+        crate::modules::category::handler::delete_category,
+        crate::modules::category::handler::reorder_categories,
 
         // Shop endpoints (V2)
         crate::modules::shop::handler::create_shop,
@@ -259,6 +269,18 @@ impl utoipa::Modify for SecurityAddon {
             crate::modules::shop::domain::ShopStatus,
             crate::modules::shop::domain::ShopLevel,
             crate::modules::shop::domain::ShopCompletionStatus,
+
+            // Category DTOs
+            crate::modules::category::dto::CreateCategoryRequest,
+            crate::modules::category::dto::UpdateCategoryRequest,
+            crate::modules::category::dto::CategoryResponse,
+            crate::modules::category::dto::CategoryTreeResponse,
+            crate::modules::category::dto::CategoryListQuery,
+            crate::modules::category::dto::ReorderCategoriesRequest,
+            crate::modules::category::dto::CategoryOrderUpdate,
+
+            // Category Domain types
+            crate::modules::category::domain::CategoryStatus,
         ),
     ),
     modifiers(&SecurityAddon)

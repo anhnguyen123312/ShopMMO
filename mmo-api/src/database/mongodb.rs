@@ -168,6 +168,9 @@ pub mod collections {
 
     /// Orders collection
     pub const ORDERS: &str = "orders";
+
+    /// Categories collection
+    pub const CATEGORIES: &str = "categories";
 }
 
 #[cfg(test)]
