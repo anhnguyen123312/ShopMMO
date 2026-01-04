@@ -41,6 +41,14 @@ pub struct ServerConfig {
 
     /// Environment (development, staging, production)
     pub environment: String,
+
+    /// Number of worker threads for HTTP server
+    /// Default: number of logical CPU cores
+    pub workers: Option<usize>,
+
+    /// Number of threads for Tokio runtime
+    /// Default: number of logical CPU cores
+    pub runtime_threads: Option<usize>,
 }
 
 /// Database configuration
@@ -139,6 +147,14 @@ impl AppConfig {
                     .map_err(|_| "Invalid PORT")?,
                 environment: env::var("ENVIRONMENT")
                     .unwrap_or_else(|_| "development".to_string()),
+                workers: env::var("SERVER_WORKERS")
+                    .ok()
+                    .map(|v| v.parse().map_err(|_| "Invalid SERVER_WORKERS"))
+                    .transpose()?,
+                runtime_threads: env::var("RUNTIME_THREADS")
+                    .ok()
+                    .map(|v| v.parse().map_err(|_| "Invalid RUNTIME_THREADS"))
+                    .transpose()?,
             },
 
             database: DatabaseConfig {

@@ -96,9 +96,23 @@ async fn main() -> std::io::Result<()> {
     let server_port = config.server.port;
     let bind_address = format!("{}:{}", server_host, server_port);
 
-    tracing::info!("Starting HTTP server at {}", bind_address);
+    // Determine number of workers (default to logical CPU cores)
+    let num_workers = config.server.workers.unwrap_or_else(|| {
+        let num_cpus = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4);
+        tracing::info!("Using {} worker threads (auto-detected)", num_cpus);
+        num_cpus
+    });
 
-    // Create HTTP server
+    tracing::info!(
+        workers = num_workers,
+        runtime_threads = config.server.runtime_threads.map(|n| n.to_string()).unwrap_or_else(|| "auto".to_string()),
+        "Starting HTTP server at {}",
+        bind_address
+    );
+
+    // Build HttpServer with workers
     HttpServer::new(move || {
         App::new()
             // Middleware
@@ -131,11 +145,12 @@ async fn main() -> std::io::Result<()> {
                     ),
             )
             // Swagger UI
-            .service(
-                utoipa_swagger_ui::SwaggerUi::new("/swagger-ui/{_:.*}")
-                    .url("/api-docs/openapi.json", openapi::ApiDoc::openapi()),
-            )
+            // .service(
+            //     utoipa_swagger_ui::SwaggerUi::new("/swagger-ui/{_:.*}")
+            //         .url("/api-docs/openapi.json", openapi::ApiDoc::openapi()),
+            // )
     })
+    .workers(num_workers)
     .bind(&bind_address)?
     .run()
     .await

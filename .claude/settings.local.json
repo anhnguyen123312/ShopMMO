@@ -45,7 +45,8 @@
       "Skill(brainstorm-p2pmmo-module:*)",
       "Bash(RUST_BACKTRACE=1 cargo run:*)",
       "Bash(RUST_BACKTRACE=full cargo run:*)",
-      "Bash(cargo fix:*)"
+      "Bash(cargo fix:*)",
+      "Bash(cargo)"
     ]
   }
 }
