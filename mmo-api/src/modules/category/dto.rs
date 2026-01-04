@@ -160,8 +160,9 @@ pub struct CategoryTreeResponse {
     /// Product count in this category
     pub product_count: i32,
 
-    /// Child categories
+    /// Child categories (references parent to avoid infinite recursion in schema)
     #[serde(default)]
+    #[schema(inline)]
     pub children: Vec<CategoryTreeResponse>,
 }
 

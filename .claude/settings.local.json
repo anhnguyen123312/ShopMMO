@@ -42,7 +42,10 @@
       "Bash(cargo doc:*)",
       "Bash(1)",
       "Skill(brainstorm-p2pmmo-module)",
-      "Skill(brainstorm-p2pmmo-module:*)"
+      "Skill(brainstorm-p2pmmo-module:*)",
+      "Bash(RUST_BACKTRACE=1 cargo run:*)",
+      "Bash(RUST_BACKTRACE=full cargo run:*)",
+      "Bash(cargo fix:*)"
     ]
   }
 }

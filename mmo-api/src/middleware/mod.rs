@@ -10,7 +10,5 @@ pub mod request_id;
 pub mod permissions;
 
 pub use auth::{AuthMiddleware, AuthUser, AdminUser};
-pub use authorization::{RequireRole, UserRole};
-pub use cors::configure_cors;
 pub use request_id::RequestId;
-pub use permissions::{AuthUserV2, extract_permissions};
+pub use permissions::extract_permissions;

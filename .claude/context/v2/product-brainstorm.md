@@ -44,12 +44,12 @@ Quản lý sản phẩm và tồn kho cho P2PMMO V2 - Cho phép vendors tạo, q
                          │                │                │
                          ▼                ▼                ▼
                   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-                  │ - Name      │  │ Process    │  │ Redirect to │
-                  │ - Category  │  │ Resize     │  │ inventory   │
-                  │ - Desc      │  │ Optimize   │  │ upload      │
-                  │ - Price     │  │ Save path  │  │             │
-                  │ - Min/Max   │  │            │  │             │
-                  │ - Settings  │  │            │  │             │
+                  │ - Name      │  │ Process    │   │ Redirect to │
+                  │ - Category  │  │ Resize     │   │ inventory   │
+                  │ - Desc      │  │ Optimize   │   │ upload      │
+                  │ - Price     │  │ Save path  │   │             │
+                  │ - Min/Max   │  │            │   │             │
+                  │ - Settings  │  │            │   │             │
                   └─────────────┘  └─────────────┘  └─────────────┘
 
   ADMIN VIEW:

@@ -8,7 +8,6 @@
 
 use actix_web::{error::ResponseError, http::StatusCode, HttpResponse};
 use serde::Serialize;
-use std::fmt;
 use thiserror::Error;
 use utoipa::ToSchema;
 
