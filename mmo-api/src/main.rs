@@ -98,15 +98,11 @@ async fn main() -> std::io::Result<()> {
 
     // Create HTTP server
     HttpServer::new(move || {
-        // Configure CORS
-        let cors = middleware::configure_cors(&config);
-
         App::new()
             // Middleware
             .wrap(TracingLogger::default())
             .wrap(Logger::default())
             .wrap(middleware::RequestId)
-            .wrap(cors)
             // V2 Authorization middleware (must come AFTER AuthMiddleware)
             .wrap(GrantsMiddleware::with_extractor(middleware::extract_permissions))
             // App data (dependency injection)

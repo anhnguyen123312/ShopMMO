@@ -44,7 +44,9 @@
       "Skill(mongodb-rust-patterns:*)",
       "Bash(grep:*)",
       "Bash(cargo doc:*)",
-      "Bash(1)"
+      "Bash(1)",
+      "Skill(brainstorm-p2pmmo-module)",
+      "Skill(brainstorm-p2pmmo-module:*)"
     ]
   }
 }
