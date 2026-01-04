@@ -44,10 +44,13 @@ impl utoipa::Modify for SecurityAddon {
     ),
     tags(
         (name = "Auth", description = "Authentication endpoints"),
-        (name = "User Wallet", description = "User-facing wallet endpoints (V3)"),
-        (name = "Wallet - Internal", description = "Internal wallet endpoints for service-to-service communication"),
-        (name = "Admin - Wallet Management", description = "Admin wallet management endpoints (V3)"),
-        (name = "Permissions", description = "Permission and role management endpoints")
+        (name = "Wallet - User", description = "User-facing wallet endpoints (V1)"),
+        (name = "Wallet - Admin", description = "Admin wallet management endpoints (V1)"),
+        (name = "Permissions", description = "Permission and role management endpoints"),
+        (name = "Shop - Vendor", description = "Vendor shop management endpoints (V2)"),
+        (name = "Shop - Public", description = "Public shop endpoints (V2)"),
+        (name = "Shop - Admin", description = "Admin shop management endpoints (V2)"),
+        (name = "Shop - Internal", description = "Internal shop endpoints for Telegram bot (V2)")
     ),
     paths(
         // Auth endpoints
@@ -58,42 +61,46 @@ impl utoipa::Modify for SecurityAddon {
         crate::modules::auth::handler::get_me,
         crate::modules::auth::handler::change_password,
 
-        // User Wallet endpoints (V3 - Public APIs)
+        // User Wallet endpoints (V1 - Public APIs)
+        crate::modules::wallet::handler::get_balance,
         crate::modules::wallet::handler::initiate_deposit,
-        crate::modules::wallet::handler::deposit_webhook,
         crate::modules::wallet::handler::get_deposit_status,
         crate::modules::wallet::handler::get_deposit_history,
+        crate::modules::wallet::handler::create_withdrawal,
+        crate::modules::wallet::handler::create_purchase,
+        crate::modules::wallet::handler::early_release_escrow,
+        crate::modules::wallet::handler::create_dispute,
+        crate::modules::wallet::handler::get_disputes_list,
+        crate::modules::wallet::handler::get_dispute_detail,
+        crate::modules::wallet::handler::seller_respond_dispute,
+        crate::modules::wallet::handler::buyer_respond_dispute,
+        crate::modules::wallet::handler::get_transaction_history,
 
-        // Internal Wallet endpoints (Service-to-Service)
-        crate::modules::wallet::handler::get_balance,
-        crate::modules::wallet::handler::create_wallet,
+        // Admin Wallet endpoints (V1 - Admin APIs)
         crate::modules::wallet::handler::create_auto_deposit,
         crate::modules::wallet::handler::manual_deposit,
-        crate::modules::wallet::handler::create_withdrawal,
+        crate::modules::wallet::handler::deposit_webhook,
+        crate::modules::wallet::handler::admin_manual_deposit,
+        crate::modules::wallet::handler::admin_get_deposits_history,
         crate::modules::wallet::handler::validate_withdrawal,
         crate::modules::wallet::handler::approve_withdrawal,
         crate::modules::wallet::handler::reject_withdrawal,
         crate::modules::wallet::handler::complete_bank_transfer,
-        crate::modules::wallet::handler::create_purchase,
-        crate::modules::wallet::handler::early_release_escrow,
-        crate::modules::wallet::handler::create_dispute,
         crate::modules::wallet::handler::resolve_dispute_refund,
         crate::modules::wallet::handler::resolve_dispute_release,
+        crate::modules::wallet::handler::process_auto_releases,
         crate::modules::wallet::handler::manual_debit,
         crate::modules::wallet::handler::freeze_wallet,
         crate::modules::wallet::handler::unfreeze_wallet,
         crate::modules::wallet::handler::set_shop_commission,
         crate::modules::wallet::handler::get_admin_logs,
-        crate::modules::wallet::handler::get_transaction_history,
-        crate::modules::wallet::handler::process_auto_releases,
-
-        // Admin Wallet endpoints (V3 - Public APIs)
-        crate::modules::wallet::handler::admin_manual_deposit,
-        crate::modules::wallet::handler::admin_get_deposits_history,
         crate::modules::wallet::handler::get_dashboard_stats,
         crate::modules::wallet::handler::trigger_reconciliation,
         crate::modules::wallet::handler::start_cron_jobs,
         crate::modules::wallet::handler::stop_cron_jobs,
+        crate::modules::wallet::handler::admin_extend_deadline,
+        crate::modules::wallet::handler::admin_partial_refund,
+        crate::modules::wallet::handler::process_auto_escalate,
 
         // Permission endpoints
         crate::modules::permissions::handler::list_permissions,
@@ -102,6 +109,19 @@ impl utoipa::Modify for SecurityAddon {
         crate::modules::permissions::handler::update_role_permissions,
         crate::modules::permissions::handler::delete_role,
         crate::modules::permissions::handler::assign_role,
+
+        // Shop endpoints (V2)
+        crate::modules::shop::handler::create_shop,
+        crate::modules::shop::handler::get_dashboard,
+        crate::modules::shop::handler::get_verification_info,
+        crate::modules::shop::handler::get_shop,
+        crate::modules::shop::handler::get_shop_by_slug,
+        crate::modules::shop::handler::update_shop,
+        crate::modules::shop::handler::update_policies,
+        crate::modules::shop::handler::list_shops,
+        crate::modules::shop::handler::search_shops,
+        crate::modules::shop::handler::verify_telegram,
+        crate::modules::shop::handler::get_stats,
     ),
     components(
         schemas(
@@ -149,7 +169,7 @@ impl utoipa::Modify for SecurityAddon {
             crate::modules::wallet::dto::PendingWithdrawalItem,
             crate::modules::wallet::dto::SuccessResponse,
             crate::modules::wallet::dto::CreateWalletRequest,
-            crate::modules::wallet::dto::DisputeRequest,
+            crate::modules::wallet::dto::CreateDisputeRequest,
             crate::modules::wallet::dto::ResolveDisputeRequest,
             crate::modules::wallet::dto::RejectWithdrawalRequest,
             crate::modules::wallet::dto::CompleteBankTransferRequest,
@@ -173,6 +193,17 @@ impl utoipa::Modify for SecurityAddon {
             // Note: TransactionHistoryResponse and AdminLogResponse excluded (contain domain types without ToSchema)
             crate::modules::wallet::dto::ProcessAutoReleaseResponse,
 
+            // Dispute System V2 DTOs
+            crate::modules::wallet::dto::SellerDisputeResponseRequest,
+            crate::modules::wallet::dto::BuyerDisputeResponseRequest,
+            crate::modules::wallet::dto::BuyerDisputeDecision,
+            crate::modules::wallet::dto::AdminExtendDeadlineRequest,
+            crate::modules::wallet::dto::AdminPartialRefundRequest,
+            crate::modules::wallet::dto::DisputeInfoResponse,
+            crate::modules::wallet::dto::DisputeListQuery,
+            crate::modules::wallet::dto::DisputeListResponse,
+            crate::modules::wallet::dto::ProcessAutoEscalateResponse,
+
             // Wallet Domain types (only enums and simple structs with ToSchema)
             crate::modules::wallet::domain::WalletType,
             crate::modules::wallet::domain::WalletStatus,
@@ -192,6 +223,10 @@ impl utoipa::Modify for SecurityAddon {
             crate::modules::wallet::domain::AdminOperation,
             crate::modules::wallet::domain::TargetType,
             crate::modules::wallet::domain::DepositStatus,
+            crate::modules::wallet::domain::DisputeStatus,
+            crate::modules::wallet::domain::DisputeType,
+            crate::modules::wallet::domain::DisputeReason,
+            crate::modules::wallet::domain::SellerAction,
 
             // Permission DTOs
             crate::modules::permissions::dto::PermissionResponse,
@@ -200,6 +235,30 @@ impl utoipa::Modify for SecurityAddon {
             crate::modules::permissions::dto::AssignUserRoleRequest,
             crate::modules::permissions::dto::RoleResponse,
             crate::modules::permissions::dto::UserPermissionsResponse,
+
+            // Shop DTOs (V2)
+            crate::modules::shop::dto::CreateShopRequest,
+            crate::modules::shop::dto::CreateShopResponse,
+            crate::modules::shop::dto::UpdateShopRequest,
+            crate::modules::shop::dto::UpdateShopPoliciesRequest,
+            crate::modules::shop::dto::UpdateShopResponse,
+            crate::modules::shop::dto::TelegramVerifyRequest,
+            crate::modules::shop::dto::TelegramVerifyResponse,
+            crate::modules::shop::dto::ShopResponse,
+            crate::modules::shop::dto::ShopDetailResponse,
+            crate::modules::shop::dto::ShopDashboardResponse,
+            crate::modules::shop::dto::ShopVerificationResponse,
+            crate::modules::shop::dto::ShopListQuery,
+            crate::modules::shop::dto::ShopListResponse,
+            crate::modules::shop::dto::ShopStatsResponse,
+            crate::modules::shop::dto::ShopLevelStats,
+            crate::modules::shop::dto::TopShopStats,
+            crate::modules::shop::upload::UploadImageRequest,
+
+            // Shop Domain types (V2)
+            crate::modules::shop::domain::ShopStatus,
+            crate::modules::shop::domain::ShopLevel,
+            crate::modules::shop::domain::ShopCompletionStatus,
         ),
     ),
     modifiers(&SecurityAddon)

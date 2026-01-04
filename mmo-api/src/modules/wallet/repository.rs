@@ -2,7 +2,7 @@
 //!
 //! MongoDB database operations for wallet system
 
-use bson::{doc, oid::ObjectId, DateTime as BsonDateTime};
+use bson::{doc, oid::ObjectId, DateTime as BsonDateTime, Document};
 use mongodb::{Collection, Database, Client, options::{FindOneOptions, FindOptions}, ClientSession};
 use futures::stream::TryStreamExt;
 use serde::{Deserialize, Serialize};
@@ -914,6 +914,212 @@ impl WalletRepository {
             .session(&mut *session)
             .await?;
         Ok(())
+    }
+
+    // ========================================================================
+    // DISPUTE CASE OPERATIONS V2 - Enhanced Dispute System
+    // ========================================================================
+
+    /// Collection for dispute cases
+    pub async fn get_dispute_cases_collection(&self) -> Collection<DisputeCase> {
+        self.client
+            .database("mmo")
+            .collection("dispute_cases")
+    }
+
+    /// Create dispute case
+    pub async fn create_dispute_case(&self, dispute: DisputeCase) -> Result<DisputeCase, DbError> {
+        let collection = self.get_dispute_cases_collection().await;
+        collection.insert_one(&dispute).await?;
+        Ok(dispute)
+    }
+
+    /// Create dispute case with session
+    pub async fn create_dispute_case_with_session(
+        &self,
+        dispute: DisputeCase,
+        session: &mut ClientSession,
+    ) -> Result<DisputeCase, DbError> {
+        let collection = self.get_dispute_cases_collection().await;
+        collection
+            .insert_one(&dispute)
+            .session(&mut *session)
+            .await?;
+        Ok(dispute)
+    }
+
+    /// Find dispute by dispute_id
+    pub async fn find_dispute_by_id(&self, dispute_id: &str) -> Result<Option<DisputeCase>, DbError> {
+        let collection = self.get_dispute_cases_collection().await;
+        collection
+            .find_one(doc! { "dispute_id": dispute_id })
+            .await
+            .map_err(DbError::from)
+    }
+
+    /// Find dispute by escrow_id
+    pub async fn find_dispute_by_escrow_id(&self, escrow_id: &str) -> Result<Option<DisputeCase>, DbError> {
+        let collection = self.get_dispute_cases_collection().await;
+        collection
+            .find_one(doc! { "escrow_id": escrow_id })
+            .await
+            .map_err(DbError::from)
+    }
+
+    /// Find dispute by order_id
+    pub async fn find_dispute_by_order_id(&self, order_id: &str) -> Result<Option<DisputeCase>, DbError> {
+        let collection = self.get_dispute_cases_collection().await;
+        collection
+            .find_one(doc! { "order_id": order_id })
+            .await
+            .map_err(DbError::from)
+    }
+
+    /// Update dispute case
+    pub async fn update_dispute_case(&self, dispute: &DisputeCase) -> Result<(), DbError> {
+        let collection = self.get_dispute_cases_collection().await;
+        let mut update = dispute.clone();
+        update.updated_at = BsonDateTime::now();
+        collection
+            .replace_one(doc! { "dispute_id": &dispute.dispute_id }, &update)
+            .await?;
+        Ok(())
+    }
+
+    /// Update dispute case with session
+    pub async fn update_dispute_case_with_session(
+        &self,
+        dispute: &DisputeCase,
+        session: &mut ClientSession,
+    ) -> Result<(), DbError> {
+        let collection = self.get_dispute_cases_collection().await;
+        let mut update = dispute.clone();
+        update.updated_at = BsonDateTime::now();
+        collection
+            .replace_one(doc! { "dispute_id": &dispute.dispute_id }, &update)
+            .session(&mut *session)
+            .await?;
+        Ok(())
+    }
+
+    /// Find disputes needing seller response (passed deadline)
+    pub async fn find_disputes_past_seller_deadline(&self) -> Result<Vec<DisputeCase>, DbError> {
+        let collection = self.get_dispute_cases_collection().await;
+        let now = BsonDateTime::now();
+        let filter = doc! {
+            "status": "PENDING",
+            "seller_response": { "$exists": false },
+            "seller_deadline": { "$lte": now }
+        };
+        let cursor = collection.find(filter).await?;
+        cursor.try_collect().await.map_err(Into::into)
+    }
+
+    /// Find disputes needing buyer response (passed deadline)
+    pub async fn find_disputes_past_buyer_deadline(&self) -> Result<Vec<DisputeCase>, DbError> {
+        let collection = self.get_dispute_cases_collection().await;
+        let now = BsonDateTime::now();
+        let filter = doc! {
+            "status": { "$in": ["SELLER_RESPONDED", "BUYER_RESPONDED"] },
+            "buyer_deadline": { "$exists": true, "$lte": now }
+        };
+        let cursor = collection.find(filter).await?;
+        cursor.try_collect().await.map_err(Into::into)
+    }
+
+    /// Find disputes by status
+    pub async fn find_disputes_by_status(
+        &self,
+        status: DisputeStatus,
+        limit: i64,
+    ) -> Result<Vec<DisputeCase>, DbError> {
+        let collection = self.get_dispute_cases_collection().await;
+        use serde_json;
+        let status_str = json!(status).as_str().unwrap_or("PENDING").to_string();
+        let cursor = collection
+            .find(doc! { "status": status_str })
+            .sort(doc! { "created_at": -1 })
+            .limit(limit)
+            .await?;
+        cursor.try_collect().await.map_err(Into::into)
+    }
+
+    /// Find disputes by user (buyer or seller)
+    pub async fn find_disputes_by_user(
+        &self,
+        user_id: &str,
+        page: i64,
+        per_page: i64,
+    ) -> Result<Vec<DisputeCase>, DbError> {
+        let collection = self.get_dispute_cases_collection().await;
+        let skip = (page - 1) * per_page;
+        let cursor = collection
+            .find(doc! {
+                "$or": [
+                    { "buyer_id": user_id },
+                    { "seller_id": user_id }
+                ]
+            })
+            .sort(doc! { "created_at": -1 })
+            .skip(skip as u64)
+            .limit(per_page)
+            .await?;
+        cursor.try_collect().await.map_err(Into::into)
+    }
+
+    /// Count disputes by user
+    pub async fn count_disputes_by_user(&self, user_id: &str) -> Result<i64, DbError> {
+        let collection = self.get_dispute_cases_collection().await;
+        let count = collection
+            .count_documents(doc! {
+                "$or": [
+                    { "buyer_id": user_id },
+                    { "seller_id": user_id }
+                ]
+            })
+            .await? as i64;
+        Ok(count)
+    }
+
+    /// Find escalated disputes (for admin review)
+    pub async fn find_escalated_disputes(&self, limit: i64) -> Result<Vec<DisputeCase>, DbError> {
+        let collection = self.get_dispute_cases_collection().await;
+        let cursor = collection
+            .find(doc! {
+                "status": { "$in": ["ESCALATED", "ADMIN_REVIEW"] }
+            })
+            .sort(doc! { "escalated_at": 1 })
+            .limit(limit)
+            .await?;
+        cursor.try_collect().await.map_err(Into::into)
+    }
+
+    /// Find disputes by order_id (list - for admin)
+    pub async fn find_disputes_list(
+        &self,
+        filter: Option<Document>,
+        page: i64,
+        per_page: i64,
+    ) -> Result<(Vec<DisputeCase>, i64), DbError> {
+        let collection = self.get_dispute_cases_collection().await;
+        let skip = (page - 1) * per_page;
+
+        let query_filter = filter.unwrap_or_else(|| doc! {});
+        let total = collection
+            .count_documents(query_filter.clone())
+            .await
+            .map_err::<mongodb::error::Error, _>(Into::into)? as i64;
+
+        let cursor = collection
+            .find(query_filter)
+            .sort(doc! { "created_at": -1 })
+            .skip(skip as u64)
+            .limit(per_page)
+            .await?;
+
+        let disputes: Vec<DisputeCase> = cursor.try_collect().await.map_err(|e| DbError::MongoError(e.to_string()))?;
+
+        Ok((disputes, total))
     }
 
     // ========================================================================

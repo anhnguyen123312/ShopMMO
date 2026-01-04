@@ -37,7 +37,14 @@
       "Skill(superpowers:writing-skills)",
       "Skill(superpowers:writing-skills:*)",
       "Bash(tree:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Skill(rust-actix-web-utoipa-standards)",
+      "Skill(rust-actix-web-utoipa-standards:*)",
+      "Skill(mongodb-rust-patterns)",
+      "Skill(mongodb-rust-patterns:*)",
+      "Bash(grep:*)",
+      "Bash(cargo doc:*)",
+      "Bash(1)"
     ]
   }
 }

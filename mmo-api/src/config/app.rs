@@ -25,6 +25,9 @@ pub struct AppConfig {
 
     /// CORS configuration
     pub cors: CorsConfig,
+
+    /// Telegram configuration
+    pub telegram: TelegramConfig,
 }
 
 /// Server configuration
@@ -103,6 +106,13 @@ pub struct CorsConfig {
 
     /// Allow credentials
     pub allow_credentials: bool,
+}
+
+/// Telegram configuration
+#[derive(Debug, Clone, Deserialize)]
+pub struct TelegramConfig {
+    /// Bot API key for verification endpoint
+    pub bot_api_key: String,
 }
 
 impl AppConfig {
@@ -189,6 +199,11 @@ impl AppConfig {
                     .unwrap_or_else(|_| "true".to_string())
                     .parse()
                     .unwrap_or(true),
+            },
+
+            telegram: TelegramConfig {
+                bot_api_key: env::var("TELEGRAM_BOT_API_KEY")
+                    .map_err(|_| "TELEGRAM_BOT_API_KEY is required")?,
             },
         })
     }

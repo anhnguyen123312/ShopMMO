@@ -11,6 +11,7 @@ use super::domain::{
     BalanceType, CheckResult, Direction, EscrowStatus, Severity, SnapshotStatus,
     TransactionStatus, TransactionType, ValidationResult, WalletStatus, WalletType,
     WithdrawalStatus, UsdtNetwork, UsdtDepositStatus, UsdtDeposit,
+    DisputeStatus, DisputeType, DisputeReason, SellerAction,
 };
 
 // ============================================================================
@@ -710,17 +711,223 @@ pub struct CreateWalletRequest {
     pub wallet_type: super::domain::WalletType,
 }
 
-/// Dispute request
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct DisputeRequest {
+// ============================================================================
+// DISPUTE DTOs V2 - Enhanced Dispute System
+// ============================================================================
+
+/// Buyer creates dispute request
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDisputeRequest {
+    /// Reason for dispute (min 20 chars)
+    #[validate(length(min = 20, max = 500))]
+    pub reason: String,
+
+    /// Evidence images (max 5 images)
+    #[validate(length(max = 5))]
+    pub evidence_images: Vec<String>,
+
+    /// Dispute reason code
+    pub dispute_reason: Option<super::domain::DisputeReason>,
+}
+
+/// Seller dispute response request
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SellerDisputeResponseRequest {
+    /// Action type: ACCEPT, PARTIAL_ACCEPT, REJECT, REPLACEMENT
+    #[serde(rename = "action")]
+    pub seller_action: super::domain::SellerAction,
+
+    /// Response message (min 20 chars)
+    #[validate(length(min = 20, max = 500))]
+    pub response: String,
+
+    /// Evidence images (max 5 images)
+    #[validate(length(max = 5))]
+    pub evidence_images: Vec<String>,
+
+    /// For PARTIAL_ACCEPT: offer amount
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[validate(range(min = 1))]
+    pub offer_amount: Option<i64>,
+
+    /// For REPLACEMENT: items file path
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replacement_items: Option<String>,
+}
+
+/// Buyer dispute response request (multi-exchange)
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BuyerDisputeResponseRequest {
+    /// Buyer's decision: ACCEPT_OFFER or ESCALATE
+    pub decision: BuyerDisputeDecision,
+
+    /// Additional message (min 20 chars if escalating)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[validate(length(min = 20, max = 500))]
+    pub message: Option<String>,
+
+    /// Additional evidence images (max 3 per update)
+    #[validate(length(max = 3))]
+    pub additional_images: Vec<String>,
+}
+
+/// Buyer decision types
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum BuyerDisputeDecision {
+    /// Accept seller's offer
+    AcceptOffer,
+    /// Escalate to admin
+    Escalate,
+}
+
+/// Admin extend deadline request
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminExtendDeadlineRequest {
+    /// Dispute ID
+    #[validate(length(min = 1))]
+    pub dispute_id: String,
+
+    /// Extension days (1-7)
+    #[validate(range(min = 1, max = 7))]
+    pub extension_days: i32,
+
+    /// Reason for extension (min 20 chars)
+    #[validate(length(min = 20, max = 500))]
     pub reason: String,
 }
 
-/// Resolve dispute request
+/// Admin partial refund request
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminPartialRefundRequest {
+    /// Dispute ID or Escrow ID
+    #[validate(length(min = 1))]
+    pub dispute_id: String,
+
+    /// Buyer percentage (0-100)
+    #[validate(range(min = 0, max = 100))]
+    pub buyer_percent: i32,
+
+    /// Admin decision reason (min 20 chars)
+    #[validate(length(min = 20, max = 500))]
+    pub reason: String,
+}
+
+/// Resolve dispute request (legacy - kept for compatibility)
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ResolveDisputeRequest {
     pub reason: String,
 }
+
+/// Dispute info response
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DisputeInfoResponse {
+    pub dispute_id: String,
+    pub escrow_id: String,
+    pub order_id: String,
+    pub buyer_id: String,
+    pub seller_id: String,
+    pub amount: i64,
+    pub status: super::domain::DisputeStatus,
+    pub dispute_type: super::domain::DisputeType,
+
+    // Buyer info
+    pub buyer_reason: String,
+    pub buyer_evidence_images: Vec<String>,
+    pub buyer_updates_count: i32,
+    pub buyer_created_at: String,
+
+    // Seller info
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seller_action: Option<super::domain::SellerAction>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seller_response: Option<String>,
+    pub seller_evidence_images: Vec<String>,
+    pub seller_updates_count: i32,
+
+    // Offer info
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seller_offer_amount: Option<i64>,
+
+    // Deadlines
+    pub seller_deadline: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub buyer_deadline: Option<String>,
+
+    // Escalation info
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub escalated_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub escalated_by: Option<String>,
+
+    // Exchange count
+    pub exchange_count: i32,
+    pub exchange_remaining: i32,
+
+    // Resolution info
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refund_amount: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seller_amount: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commission_amount: Option<i64>,
+
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Dispute list query
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DisputeListQuery {
+    #[serde(default = "default_page")]
+    pub page: i64,
+
+    #[serde(default = "default_per_page")]
+    pub per_page: i64,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order_id: Option<String>,
+}
+
+/// Dispute list response
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DisputeListResponse {
+    pub disputes: Vec<DisputeInfoResponse>,
+    pub total: i64,
+    pub page: i64,
+    pub per_page: i64,
+}
+
+/// Process auto-escalate response
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessAutoEscalateResponse {
+    pub total_processed: i32,
+    pub escalated_count: i32,
+    pub auto_resolved_count: i32,
+    pub failed_count: i32,
+    pub escalated_ids: Vec<String>,
+    pub resolved_ids: Vec<String>,
+    pub errors: Vec<String>,
+}
+
+// ============================================================================
+// LEGACY DTOs (for backward compatibility)
+// ============================================================================
 
 /// Manual debit request (alias for AdminDebitRequest)
 pub type ManualDebitRequest = AdminDebitRequest;

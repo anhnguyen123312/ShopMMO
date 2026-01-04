@@ -205,6 +205,20 @@ pub mod keys {
     pub fn otp(email: &str) -> String {
         format!("otp:{}", email)
     }
+
+    /// Telegram verification key prefix
+    ///
+    /// Format: telegram:verify:{shop_id}
+    pub fn telegram_verify(shop_id: &str) -> String {
+        format!("telegram:verify:{}", shop_id)
+    }
+
+    /// Telegram verification code lookup (reverse mapping)
+    ///
+    /// Format: telegram:code:{verification_code}
+    pub fn telegram_code(verification_code: &str) -> String {
+        format!("telegram:code:{}", verification_code)
+    }
 }
 
 #[cfg(test)]

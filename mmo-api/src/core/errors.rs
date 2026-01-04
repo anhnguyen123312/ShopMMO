@@ -175,6 +175,9 @@ pub enum ServiceError {
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
 
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+
     #[error("Database operation failed: {0}")]
     DatabaseError(String),
 
@@ -193,6 +196,7 @@ impl From<ServiceError> for ApiError {
                 ApiError::bad_request("Insufficient balance for this operation")
             }
             ServiceError::Unauthorized(msg) => ApiError::unauthorized(msg),
+            ServiceError::Forbidden(msg) => ApiError::forbidden(msg),
             ServiceError::DatabaseError(msg) => ApiError::database(msg),
             ServiceError::InternalError(msg) => ApiError::internal(msg),
         }

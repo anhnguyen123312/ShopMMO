@@ -5,6 +5,7 @@
 pub mod auth;
 pub mod wallet;
 pub mod permissions;
+pub mod shop;
 
 // TODO: Add more modules as needed:
 // pub mod order;

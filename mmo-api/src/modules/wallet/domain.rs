@@ -552,7 +552,9 @@ pub enum EscrowStatus {
     Released,
     Refunded,
     Disputed,
+    PartialRefund,
     CancelledBySeller,
+    Extended,
 }
 
 /// Release type for escrow
@@ -1003,5 +1005,476 @@ impl UsdtDeposit {
     pub fn can_credit(&self) -> bool {
         self.status == UsdtDepositStatus::Confirmed
             || (self.status == UsdtDepositStatus::Confirming && self.has_enough_confirmations())
+    }
+}
+
+// ============================================================================
+// DISPUTE CASE MODEL - Enhanced Dispute System V2
+// ============================================================================
+
+/// Dispute case document - Full dispute tracking with multi-exchange
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DisputeCase {
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    pub id: Option<ObjectId>,
+
+    /// Unique dispute ID: DSP-{ULID}
+    pub dispute_id: String,
+
+    /// Reference to escrow
+    pub escrow_id: String,
+    pub escrow_status_at_dispute: EscrowStatus,
+
+    /// Order info
+    pub order_id: String,
+    pub buyer_id: String,
+    pub seller_id: String,
+
+    /// Amount in dispute
+    pub amount: i64,
+
+    // === Type & Status ===
+    /// Dispute type
+    pub dispute_type: DisputeType,
+
+    /// Current status
+    pub status: DisputeStatus,
+
+    // === Buyer Initial Request ===
+    pub buyer_reason: String,
+
+    /// Evidence images (max 5 initially)
+    #[serde(default)]
+    pub buyer_evidence_images: Vec<String>,
+
+    /// Buyer updates (multi-exchange)
+    #[serde(default)]
+    pub buyer_updates: Vec<DisputeUpdate>,
+
+    /// When buyer submitted dispute
+    pub buyer_created_at: BsonDateTime,
+
+    /// Last time buyer responded
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub buyer_responded_at: Option<BsonDateTime>,
+
+    // === Seller Response ===
+    /// Seller's action type
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seller_action: Option<SellerAction>,
+
+    /// Seller's response message
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seller_response: Option<String>,
+
+    /// Seller's evidence images
+    #[serde(default)]
+    pub seller_evidence_images: Vec<String>,
+
+    /// Seller updates (multi-exchange)
+    #[serde(default)]
+    pub seller_updates: Vec<DisputeUpdate>,
+
+    /// When seller responded
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seller_responded_at: Option<BsonDateTime>,
+
+    // === Partial Offer (for PARTIAL_ACCEPT) ===
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seller_offer_amount: Option<i64>,
+
+    // === Replacement Items (for REPLACEMENT) ===
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seller_replacement_items: Option<String>,
+
+    // === Deadlines ===
+    /// Seller must respond within 48 hours (2 days)
+    pub seller_deadline: BsonDateTime,
+
+    /// Buyer must respond within 24 hours after seller
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub buyer_deadline: Option<BsonDateTime>,
+
+    // === Escalation ===
+    /// Total exchanges (messages from both sides)
+    #[serde(default)]
+    pub exchange_count: i32,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub escalated_at: Option<BsonDateTime>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub escalated_by: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub escalate_reason: Option<String>,
+
+    // === Extension ===
+    /// Admin extended deadline
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extended_at: Option<BsonDateTime>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extended_by: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extension_days: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_deadline: Option<BsonDateTime>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extension_reason: Option<String>,
+
+    // === Resolution ===
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolved_at: Option<BsonDateTime>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolved_by: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolution: Option<String>,
+
+    /// Final refund amount
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refund_amount: Option<i64>,
+
+    /// Final amount to seller (after commission)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seller_amount: Option<i64>,
+
+    /// Commission deducted
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commission_amount: Option<i64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refund_processed_at: Option<BsonDateTime>,
+
+    // === Admin Review ===
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub admin_review_started_at: Option<BsonDateTime>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub admin_decision: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub admin_note: Option<String>,
+
+    // === Timestamps ===
+    pub created_at: BsonDateTime,
+    pub updated_at: BsonDateTime,
+}
+
+/// Dispute type
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum DisputeType {
+    /// Buyer requests refund
+    RefundRequest,
+    /// Seller requests cancellation (V1 only, removed in V2)
+    #[serde(rename = "seller_cancel")]
+    SellerCancel,
+    /// Other dispute types
+    Other,
+}
+
+/// Dispute status (V2 - enhanced flow)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum DisputeStatus {
+    /// Buyer created dispute, waiting for seller
+    Pending,
+    /// Seller responded
+    SellerResponded,
+    /// Buyer responded to seller
+    BuyerResponded,
+    /// Escalated to admin
+    Escalated,
+    /// Admin reviewing
+    AdminReview,
+    /// Resolved by agreement
+    Resolved,
+    /// Full refund to buyer
+    Refunded,
+    /// Partial refund
+    PartialRefund,
+    /// Rejected, money to seller
+    Rejected,
+    /// Closed without resolution
+    Closed,
+    /// Extended by admin
+    Extended,
+}
+
+/// Seller action types
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SellerAction {
+    /// Accept full refund
+    Accept,
+    /// Accept partial refund with offer
+    PartialAccept,
+    /// Reject dispute
+    Reject,
+    /// Offer replacement items
+    Replacement,
+}
+
+/// Dispute update (multi-exchange)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DisputeUpdate {
+    /// Update message
+    pub message: String,
+
+    /// Additional evidence images (max 3 per update)
+    #[serde(default)]
+    pub images: Vec<String>,
+
+    /// Who sent this update
+    pub sent_by: String,
+
+    /// When sent
+    pub sent_at: BsonDateTime,
+}
+
+/// Dispute reason codes
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum DisputeReason {
+    WrongItem,
+    NotWorking,
+    Duplicate,
+    MissingItems,
+    QualityIssue,
+    PartialWorking,
+    Other,
+}
+
+impl DisputeCase {
+    /// Create new dispute from buyer
+    pub fn new_buyer_dispute(
+        dispute_id: String,
+        escrow_id: String,
+        escrow_status: EscrowStatus,
+        order_id: String,
+        buyer_id: String,
+        seller_id: String,
+        amount: i64,
+        reason: String,
+        evidence_images: Vec<String>,
+    ) -> Self {
+        let now = BsonDateTime::now();
+        let seller_deadline = BsonDateTime::from_millis(
+            now.timestamp_millis() + (48 * 60 * 60 * 1000), // 48 hours
+        );
+
+        Self {
+            id: None,
+            dispute_id,
+            escrow_id,
+            escrow_status_at_dispute: escrow_status,
+            order_id,
+            buyer_id,
+            seller_id,
+            amount,
+            dispute_type: DisputeType::RefundRequest,
+            status: DisputeStatus::Pending,
+            buyer_reason: reason,
+            buyer_evidence_images: evidence_images,
+            buyer_updates: vec![],
+            buyer_created_at: now,
+            buyer_responded_at: None,
+            seller_action: None,
+            seller_response: None,
+            seller_evidence_images: vec![],
+            seller_updates: vec![],
+            seller_responded_at: None,
+            seller_offer_amount: None,
+            seller_replacement_items: None,
+            seller_deadline,
+            buyer_deadline: None,
+            exchange_count: 0,
+            escalated_at: None,
+            escalated_by: None,
+            escalate_reason: None,
+            extended_at: None,
+            extended_by: None,
+            extension_days: None,
+            new_deadline: None,
+            extension_reason: None,
+            resolved_at: None,
+            resolved_by: None,
+            resolution: None,
+            refund_amount: None,
+            seller_amount: None,
+            commission_amount: None,
+            refund_processed_at: None,
+            admin_review_started_at: None,
+            admin_decision: None,
+            admin_note: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    /// Check if seller deadline has passed
+    pub fn is_seller_deadline_passed(&self) -> bool {
+        BsonDateTime::now().timestamp_millis() > self.seller_deadline.timestamp_millis()
+    }
+
+    /// Check if buyer deadline has passed
+    pub fn is_buyer_deadline_passed(&self) -> bool {
+        if let Some(deadline) = self.buyer_deadline {
+            BsonDateTime::now().timestamp_millis() > deadline.timestamp_millis()
+        } else {
+            false
+        }
+    }
+
+    /// Check if max exchanges reached (3 rounds = 6 messages)
+    pub fn is_max_exchanges_reached(&self) -> bool {
+        self.exchange_count >= 6
+    }
+
+    /// Check if dispute can be auto-escalated (seller no response)
+    pub fn should_auto_escalate_seller(&self) -> bool {
+        self.status == DisputeStatus::Pending
+            && self.seller_responded_at.is_none()
+            && self.is_seller_deadline_passed()
+    }
+
+    /// Check if dispute can be auto-escalated (buyer no response)
+    pub fn should_auto_escalate_buyer(&self) -> bool {
+        if let Some(deadline) = self.buyer_deadline {
+            (self.status == DisputeStatus::SellerResponded
+                || self.status == DisputeStatus::BuyerResponded)
+                && self.is_buyer_deadline_passed()
+        } else {
+            false
+        }
+    }
+
+    /// Check if dispute can be auto-resolved (buyer no response, seller accepted)
+    pub fn can_auto_resolve(&self) -> bool {
+        if let Some(deadline) = self.buyer_deadline {
+            if let Some(action) = &self.seller_action {
+                return matches!(
+                    action,
+                    SellerAction::Accept | SellerAction::PartialAccept
+                ) && self.is_buyer_deadline_passed();
+            }
+        }
+        false
+    }
+
+    /// Add buyer update
+    pub fn add_buyer_update(&mut self, message: String, images: Vec<String>) {
+        let update = DisputeUpdate {
+            message,
+            images,
+            sent_by: self.buyer_id.clone(),
+            sent_at: BsonDateTime::now(),
+        };
+        self.buyer_updates.push(update);
+        self.buyer_responded_at = Some(BsonDateTime::now());
+        self.exchange_count += 1;
+        self.updated_at = BsonDateTime::now();
+    }
+
+    /// Add seller update
+    pub fn add_seller_update(&mut self, message: String, images: Vec<String>) {
+        let update = DisputeUpdate {
+            message,
+            images,
+            sent_by: self.seller_id.clone(),
+            sent_at: BsonDateTime::now(),
+        };
+        self.seller_updates.push(update);
+        self.seller_responded_at = Some(BsonDateTime::now());
+        self.exchange_count += 1;
+        self.updated_at = BsonDateTime::now();
+    }
+
+    /// Set seller action and update status
+    pub fn set_seller_action(&mut self, action: SellerAction) {
+        self.seller_action = Some(action.clone());
+        self.seller_responded_at = Some(BsonDateTime::now());
+
+        // Update status based on action
+        self.status = match action {
+            SellerAction::Accept => {
+                // Auto-resolve, no need for buyer response
+                DisputeStatus::Resolved
+            }
+            _ => {
+                // Buyer needs to respond
+                DisputeStatus::SellerResponded
+            }
+        };
+
+        self.updated_at = BsonDateTime::now();
+    }
+
+    /// Extend deadline (admin action)
+    pub fn extend_deadline(&mut self, days: i32, admin_id: String, reason: String) {
+        let now = BsonDateTime::now();
+        let current_deadline = if let Some(existing) = self.new_deadline {
+            existing
+        } else {
+            self.seller_deadline.clone()
+        };
+
+        let new_deadline = BsonDateTime::from_millis(
+            current_deadline.timestamp_millis() + (days as i64 * 24 * 60 * 60 * 1000)
+        );
+
+        self.extended_at = Some(now);
+        self.extended_by = Some(admin_id);
+        self.extension_days = Some(days);
+        self.new_deadline = Some(new_deadline.clone());
+        self.extension_reason = Some(reason);
+        self.seller_deadline = new_deadline;
+        self.status = DisputeStatus::Extended;
+        self.updated_at = now;
+    }
+
+    /// Escalate to admin
+    pub fn escalate(&mut self, escalated_by: String, reason: String) {
+        self.escalated_at = Some(BsonDateTime::now());
+        self.escalated_by = Some(escalated_by.clone());
+        self.escalate_reason = Some(reason);
+        self.status = DisputeStatus::Escalated;
+        self.updated_at = BsonDateTime::now();
+    }
+
+    /// Resolve as refunded
+    pub fn resolve_refunded(&mut self, refund_amount: i64, resolved_by: String) {
+        let now = BsonDateTime::now();
+        self.status = if refund_amount == self.amount {
+            DisputeStatus::Refunded
+        } else {
+            DisputeStatus::PartialRefund
+        };
+        self.resolved_at = Some(now);
+        self.resolved_by = Some(resolved_by);
+        self.refund_amount = Some(refund_amount);
+        self.resolution = Some(if refund_amount == self.amount {
+            "FULL_REFUND".to_string()
+        } else {
+            format!("PARTIAL_REFUND_{}%", (refund_amount as f64 / self.amount as f64 * 100.0) as i32)
+        });
+        self.updated_at = now;
+    }
+
+    /// Resolve as rejected (money to seller)
+    pub fn resolve_rejected(&mut self, resolved_by: String, reason: String) {
+        let now = BsonDateTime::now();
+        self.status = DisputeStatus::Rejected;
+        self.resolved_at = Some(now);
+        self.resolved_by = Some(resolved_by);
+        self.resolution = Some("REJECTED_SELLER_FAVORED".to_string());
+        self.admin_note = Some(reason);
+        self.updated_at = now;
     }
 }
