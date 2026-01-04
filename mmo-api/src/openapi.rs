@@ -44,8 +44,9 @@ impl utoipa::Modify for SecurityAddon {
     ),
     tags(
         (name = "Auth", description = "Authentication endpoints"),
-        (name = "Wallet", description = "Wallet management endpoints"),
-        (name = "Admin", description = "Admin-only endpoints"),
+        (name = "User Wallet", description = "User-facing wallet endpoints (V3)"),
+        (name = "Wallet - Internal", description = "Internal wallet endpoints for service-to-service communication"),
+        (name = "Admin - Wallet Management", description = "Admin wallet management endpoints (V3)"),
         (name = "Permissions", description = "Permission and role management endpoints")
     ),
     paths(
@@ -57,7 +58,13 @@ impl utoipa::Modify for SecurityAddon {
         crate::modules::auth::handler::get_me,
         crate::modules::auth::handler::change_password,
 
-        // Wallet endpoints
+        // User Wallet endpoints (V3 - Public APIs)
+        crate::modules::wallet::handler::initiate_deposit,
+        crate::modules::wallet::handler::deposit_webhook,
+        crate::modules::wallet::handler::get_deposit_status,
+        crate::modules::wallet::handler::get_deposit_history,
+
+        // Internal Wallet endpoints (Service-to-Service)
         crate::modules::wallet::handler::get_balance,
         crate::modules::wallet::handler::create_wallet,
         crate::modules::wallet::handler::create_auto_deposit,
@@ -79,6 +86,14 @@ impl utoipa::Modify for SecurityAddon {
         crate::modules::wallet::handler::get_admin_logs,
         crate::modules::wallet::handler::get_transaction_history,
         crate::modules::wallet::handler::process_auto_releases,
+
+        // Admin Wallet endpoints (V3 - Public APIs)
+        crate::modules::wallet::handler::admin_manual_deposit,
+        crate::modules::wallet::handler::admin_get_deposits_history,
+        crate::modules::wallet::handler::get_dashboard_stats,
+        crate::modules::wallet::handler::trigger_reconciliation,
+        crate::modules::wallet::handler::start_cron_jobs,
+        crate::modules::wallet::handler::stop_cron_jobs,
 
         // Permission endpoints
         crate::modules::permissions::handler::list_permissions,
@@ -139,6 +154,22 @@ impl utoipa::Modify for SecurityAddon {
             crate::modules::wallet::dto::RejectWithdrawalRequest,
             crate::modules::wallet::dto::CompleteBankTransferRequest,
             crate::modules::wallet::dto::AdminLogQuery,
+
+            // V3 Deposit DTOs
+            crate::modules::wallet::dto::DepositInitiateRequest,
+            crate::modules::wallet::dto::DepositInitiateResponse,
+            crate::modules::wallet::dto::PaymentWebhookPayload,
+            crate::modules::wallet::dto::DepositStatusResponse,
+            crate::modules::wallet::dto::DepositHistoryResponse,
+            crate::modules::wallet::dto::DepositHistoryQuery,
+            crate::modules::wallet::dto::AdminManualDepositRequest,
+            crate::modules::wallet::dto::AdminDepositHistoryQuery,
+
+            // Admin Dashboard DTOs
+            crate::modules::wallet::dto::DashboardStatsResponse,
+            crate::modules::wallet::dto::ReconciliationResponse,
+            crate::modules::wallet::dto::ReconciliationDiscrepancy,
+
             // Note: TransactionHistoryResponse and AdminLogResponse excluded (contain domain types without ToSchema)
             crate::modules::wallet::dto::ProcessAutoReleaseResponse,
 

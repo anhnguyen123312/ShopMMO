@@ -10,7 +10,7 @@ use utoipa::ToSchema;
 use super::domain::{
     BalanceType, CheckResult, Direction, EscrowStatus, Severity, SnapshotStatus,
     TransactionStatus, TransactionType, ValidationResult, WalletStatus, WalletType,
-    WithdrawalStatus,
+    WithdrawalStatus, UsdtNetwork, UsdtDepositStatus, UsdtDeposit,
 };
 
 // ============================================================================
@@ -145,6 +145,112 @@ pub struct DepositResponse {
     pub status: String,
     pub expires_at: Option<String>,
     pub created_at: String,
+}
+
+/// Deposit initiate request (3rd party payment)
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DepositInitiateRequest {
+    /// VND amount (must be divisible by 1000)
+    #[validate(range(min = 10000, max = 50000000, message = "Amount must be between 10,000 and 50,000,000 VND"))]
+    #[validate(custom(function = "validate_divisible_by_1000"))]
+    pub amount_vnd: i64,
+
+    /// Payment method: VNPay, MoMo, BankTransfer
+    #[validate(length(min = 1, max = 50))]
+    pub payment_method: String,
+
+    /// Return URL after payment
+    #[validate(url)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub return_url: Option<String>,
+
+    /// Cancel URL
+    #[validate(url)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cancel_url: Option<String>,
+}
+
+/// Deposit initiate response
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DepositInitiateResponse {
+    pub deposit_id: String,
+    pub transaction_id: String,
+    pub amount_vnd: i64,
+    pub trust_amount: i64,
+    pub payment_method: String,
+    pub payment_url: String,
+    pub expires_at: String,
+    pub status: String,
+    pub created_at: String,
+}
+
+/// Deposit status response
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DepositStatusResponse {
+    pub deposit_id: String,
+    pub transaction_id: String,
+    pub amount_vnd: i64,
+    pub trust_amount: i64,
+    pub payment_method: String,
+    pub status: String,
+    pub payment_gateway_ref: Option<String>,
+    pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+}
+
+/// Webhook payload from payment gateway
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentWebhookPayload {
+    /// Gateway transaction ID
+    pub transaction_id: String,
+
+    /// Our deposit ID
+    pub deposit_id: String,
+
+    /// Payment status: success, cancelled, failed
+    pub status: String,
+
+    /// Amount in VND
+    pub amount_vnd: i64,
+
+    /// Signature for verification
+    pub signature: String,
+
+    /// Additional gateway data
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gateway_data: Option<serde_json::Value>,
+}
+
+/// Deposit history item
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DepositHistoryItem {
+    pub deposit_id: String,
+    pub transaction_id: String,
+    pub amount_vnd: i64,
+    pub trust_amount: i64,
+    pub payment_method: String,
+    pub status: String,
+    pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<String>,
+}
+
+/// Deposit history response
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DepositHistoryResponse {
+    pub deposits: Vec<DepositHistoryItem>,
+    pub total: i64,
+    pub page: i64,
+    pub per_page: i64,
 }
 
 // ============================================================================
@@ -671,4 +777,272 @@ pub struct ProcessAutoReleaseResponse {
     pub released_ids: Vec<String>,
     pub errors: Vec<String>,
 }
+
+// ============================================================================
+// USDT DEPOSIT DTOs
+// ============================================================================
+
+/// Get USDT deposit address response
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UsdtDepositAddressResponse {
+    /// Platform USDT address (TRC20)
+    pub deposit_address: String,
+
+    /// Network type
+    pub network: String,
+
+    /// Memo format for user to include
+    pub memo_format: String,
+
+    /// Example memo
+    pub memo_example: String,
+
+    /// Minimum deposit amount
+    pub min_deposit: f64,
+
+    /// Maximum deposit amount
+    pub max_deposit: f64,
+
+    /// Current exchange rate
+    pub exchange_rate: f64,
+
+    /// Required confirmations
+    pub required_confirmations: i32,
+}
+
+/// USDT deposit status response
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UsdtDepositStatusResponse {
+    pub deposit_id: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usdt_amount: Option<f64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vnd_amount: Option<i64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trust_amount: Option<i64>,
+
+    pub network: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_hash: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confirmations: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required_confirmations: Option<i32>,
+
+    pub status: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub credited_at: Option<String>,
+}
+
+/// List USDT deposits response (admin)
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UsdtDepositsListResponse {
+    pub deposits: Vec<UsdtDepositItemResponse>,
+    pub count: i64,
+    pub total_usdt: f64,
+    pub total_vnd: i64,
+}
+
+/// Single USDT deposit item
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UsdtDepositItemResponse {
+    pub deposit_id: String,
+    pub user_id: String,
+    pub wallet_id: String,
+
+    pub usdt_amount: f64,
+    pub vnd_amount: i64,
+    pub trust_amount: i64,
+
+    pub network: String,
+    pub sender_address: String,
+    pub transaction_hash: String,
+    pub block_number: i64,
+
+    pub exchange_rate: f64,
+
+    pub confirmations: i32,
+    pub required_confirmations: i32,
+
+    pub status: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memo: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub credited_at: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failed_reason: Option<String>,
+
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Manual credit USDT deposit request (admin)
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualCreditUsdtRequest {
+    /// Deposit ID to credit
+    #[validate(length(min = 1))]
+    pub deposit_id: String,
+
+    /// Reason for manual credit
+    #[validate(length(min = 10, max = 500))]
+    pub reason: String,
+
+    /// Optional note
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[validate(length(max = 1000))]
+    pub note: Option<String>,
+}
+
+/// Get exchange rate response
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExchangeRateResponse {
+    pub usdt_to_vnd: f64,
+    pub updated_at: String,
+}
+
+/// Deposit history query parameters
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DepositHistoryQuery {
+    #[serde(default = "default_page")]
+    pub page: i64,
+
+    #[serde(default = "default_per_page")]
+    pub per_page: i64,
+}
+
+/// Admin deposit history query parameters
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminDepositHistoryQuery {
+    #[serde(default = "default_page")]
+    pub page: i64,
+
+    #[serde(default = "default_admin_per_page")]
+    pub per_page: i64,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+}
+
+/// Admin manual deposit request
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminManualDepositRequest {
+    /// Target user ID
+    #[validate(length(min = 1))]
+    pub target_user_id: String,
+
+    /// Trust amount to deposit (min 1, max 1,000,000)
+    #[validate(range(min = 1, max = 1000000, message = "Amount must be between 1 and 1,000,000 Trust"))]
+    pub trust_amount: i64,
+
+    /// Reason for manual deposit (min 10 chars)
+    #[validate(length(min = 10, max = 500))]
+    pub reason: String,
+
+    /// Optional note
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[validate(length(max = 1000))]
+    pub note: Option<String>,
+}
+
+fn default_page() -> i64 { 1 }
+fn default_per_page() -> i64 { 20 }
+fn default_admin_per_page() -> i64 { 50 }
+
+// ============================================================================
+// DASHBOARD STATS DTOs
+// ============================================================================
+
+/// Dashboard statistics response for admin
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardStatsResponse {
+    // Platform wallet overview
+    pub platform_balance: i64,
+    pub platform_escrow_held: i64,
+
+    // Today's activity
+    pub today_transaction_count: i64,
+    pub today_transaction_volume: i64,
+    pub today_commission: Option<i64>,
+
+    // Pending actions
+    pub pending_withdrawals: i64,
+    pub pending_withdrawal_amount: i64,
+
+    // Escrow stats
+    pub active_escrows: i64,
+
+    // USDT stats
+    pub usdt_deposits_today: i64,
+    pub usdt_pending: i64,
+    pub usdt_total_trust: i64,
+
+    // System health
+    pub system_status: String,
+    pub last_updated: String,
+}
+
+/// Reconciliation discrepancy detail
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReconciliationDiscrepancy {
+    pub wallet_id: String,
+    pub discrepancy_type: String,
+    pub expected: i64,
+    pub actual: i64,
+    pub details: String,
+}
+
+/// Reconciliation response
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReconciliationResponse {
+    pub reconciliation_id: String,
+    pub wallets_checked: i64,
+    pub discrepancy_count: i64,
+    pub discrepancies: Vec<ReconciliationDiscrepancy>,
+    pub duration_ms: i64,
+    pub status: String,
+    pub performed_at: String,
+}
+
+/// USDT deposits summary (already exists, adding for reference)
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UsdtDepositsSummary {
+    pub total_deposits: i64,
+    pub pending_deposits: i64,
+    pub confirmed_deposits: i64,
+    pub total_usdt_amount: f64,
+    pub total_trust_amount: i64,
+}
+
+// ============================================================================
+// VALIDATION FUNCTIONS
+// ============================================================================
 

@@ -87,6 +87,67 @@ impl WalletService {
         Ok(created)
     }
 
+    /// Get wallet info
+    pub async fn get_wallet_info(
+        &self,
+        wallet_id: &str,
+    ) -> Result<WalletInfoResponse, ServiceError> {
+        let wallet = self
+            .repo
+            .find_wallet_by_id(wallet_id)
+            .await?
+            .ok_or_else(|| ServiceError::NotFound("Wallet not found".to_string()))?;
+
+        let wallet_type = wallet.wallet_type;
+        let commission_debt = if wallet_type == WalletType::Seller {
+            Some(wallet.commission_debt)
+        } else {
+            None
+        };
+
+        Ok(WalletInfoResponse {
+            wallet_id: wallet.wallet_id,
+            user_id: wallet.user_id,
+            wallet_type,
+            available_trust: wallet.available_trust,
+            withdrawal_locked: wallet.withdrawal_locked,
+            dispute_locked: wallet.dispute_locked,
+            total_trust: wallet.total_trust,
+            lifetime_deposited: wallet.lifetime_deposited,
+            lifetime_withdrawn: wallet.lifetime_withdrawn,
+            lifetime_spent: wallet.lifetime_spent,
+            lifetime_received: wallet.lifetime_received,
+            commission_debt,
+            commission_rate: wallet.commission_rate,
+            last_snapshot_month: wallet.last_snapshot_month,
+            last_snapshot_balance: wallet.last_snapshot_balance,
+            status: wallet.status,
+            freeze_reason: wallet.freeze_reason,
+            created_at: wallet.created_at.to_string(),
+            updated_at: wallet.updated_at.to_string(),
+        })
+    }
+
+    /// Get transaction history for wallet
+    pub async fn get_transaction_history(
+        &self,
+        wallet_id: &str,
+        page_size: i64,
+    ) -> Result<TransactionHistoryResponse, ServiceError> {
+        let page_size = page_size.clamp(1, 100); // Limit between 1-100
+        let transactions = self
+            .repo
+            .find_transactions_by_wallet(wallet_id, None, None, page_size, 0)
+            .await?;
+
+        let count = transactions.len() as i64;
+        Ok(TransactionHistoryResponse {
+            wallet_id: wallet_id.to_string(),
+            transactions,
+            count,
+        })
+    }
+
     // ========================================================================
     // DEPOSIT FLOW
     // ========================================================================
@@ -222,6 +283,420 @@ impl WalletService {
             "Successfully deposited {} Trust to wallet",
             req.trust_amount
         )))
+    }
+
+    // ========================================================================
+    // 3RD PARTY DEPOSIT FLOW
+    // ========================================================================
+
+    /// Initiate deposit via 3rd party payment gateway
+    pub async fn initiate_deposit(
+        &self,
+        wallet_id: &str,
+        user_id: &str,
+        req: dto::DepositInitiateRequest,
+    ) -> Result<dto::DepositInitiateResponse, ServiceError> {
+        // Validate wallet exists
+        let wallet = self
+            .repo
+            .find_wallet_by_id(wallet_id)
+            .await?
+            .ok_or_else(|| ServiceError::NotFound("Wallet not found".to_string()))?;
+
+        // Calculate trust amount
+        let trust_amount = req.amount_vnd / 1000;
+
+        // Create deposit record
+        let deposit_id = Self::generate_id("DEP");
+        let transaction_id = Self::generate_id("TXN");
+        let now = BsonDateTime::now();
+        let expires_at = BsonDateTime::from_millis(now.timestamp_millis() + (15 * 60 * 1000)); // 15 minutes
+
+        // Create pending transaction
+        let tx = Transaction::new(
+            transaction_id.clone(),
+            wallet.wallet_id.clone(),
+            user_id.to_string(),
+            TransactionType::DepositPending,
+            Direction::Credit,
+            trust_amount,
+            wallet.available_trust,
+            wallet.available_trust, // No change yet
+            BalanceType::Available,
+            user_id.to_string(),
+        );
+
+        // In a real implementation, you would call the payment gateway API here
+        // For now, we'll return a mock payment URL
+        let payment_url = format!(
+            "https://payment-gateway.example.com/pay?deposit_id={}&method={}",
+            deposit_id, req.payment_method
+        );
+
+        // Save the transaction
+        self.repo.create_transaction(tx).await?;
+
+        Ok(dto::DepositInitiateResponse {
+            deposit_id,
+            transaction_id,
+            amount_vnd: req.amount_vnd,
+            trust_amount,
+            payment_method: req.payment_method,
+            payment_url,
+            expires_at: expires_at.to_string(),
+            status: "PENDING".to_string(),
+            created_at: now.to_string(),
+        })
+    }
+
+    /// Process deposit webhook from payment gateway
+    pub async fn process_deposit_webhook(
+        &self,
+        payload: dto::PaymentWebhookPayload,
+    ) -> Result<(), ServiceError> {
+        // TODO: Validate signature
+        // In production, you would verify HMAC signature here
+
+        // Find the pending transaction
+        let tx_opt = self
+            .repo
+            .find_transaction_by_id(&payload.deposit_id)
+            .await?;
+
+        let mut tx = tx_opt.ok_or_else(|| ServiceError::NotFound("Transaction not found".to_string()))?;
+
+        // Check if already processed (idempotency)
+        if tx.status == TransactionStatus::Completed {
+            tracing::info!("Webhook for already completed transaction: {}", payload.deposit_id);
+            return Ok(());
+        }
+
+        // Get wallet
+        let mut wallet = self
+            .repo
+            .find_wallet_by_id(&tx.wallet_id)
+            .await?
+            .ok_or_else(|| ServiceError::NotFound("Wallet not found".to_string()))?;
+
+        // Only process successful payments
+        if payload.status.to_lowercase() == "success" {
+            let balance_before = wallet.available_trust;
+            let balance_after = balance_before + tx.amount;
+
+            // Update transaction
+            tx.status = TransactionStatus::Completed;
+            tx.balance_after = balance_after;
+            tx.external_ref = Some(payload.transaction_id.clone());
+            tx.completed_at = Some(BsonDateTime::now());
+            tx.vnd_amount = Some(payload.amount_vnd);
+
+            // Update wallet
+            wallet.available_trust += tx.amount;
+            wallet.total_trust += tx.amount;
+            wallet.lifetime_deposited += tx.amount;
+
+            // Validate invariant
+            Self::validate_invariant(&wallet)?;
+
+            // Save to database
+            self.repo.update_transaction(&tx).await?;
+            self.repo.update_wallet(&wallet).await?;
+
+            // Create credit transaction
+            let credit_tx_id = Self::generate_id("TXN");
+            let mut credit_tx = Transaction::new(
+                credit_tx_id,
+                wallet.wallet_id.clone(),
+                wallet.user_id.clone(),
+                TransactionType::DepositTrustCredited,
+                Direction::Credit,
+                tx.amount,
+                balance_before,
+                balance_after,
+                BalanceType::Available,
+                "SYSTEM".to_string(),
+            );
+            credit_tx.vnd_amount = Some(payload.amount_vnd);
+            credit_tx.reference_id = Some(tx.tx_id.clone());
+            credit_tx.reference_type = Some(ReferenceType::Deposit);
+            credit_tx.status = TransactionStatus::Completed;
+            credit_tx.completed_at = Some(BsonDateTime::now());
+
+            self.repo.create_transaction(credit_tx).await?;
+
+            tracing::info!(
+                "Deposit webhook processed: {} Trust credited to wallet {}",
+                tx.amount,
+                wallet.wallet_id
+            );
+        } else {
+            // Mark as failed
+            tx.status = TransactionStatus::Failed;
+            self.repo.update_transaction(&tx).await?;
+
+            tracing::info!(
+                "Deposit webhook processed: Transaction {} marked as failed",
+                tx.tx_id
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Get deposit status
+    pub async fn get_deposit_status(
+        &self,
+        user_id: &str,
+        tx_id: &str,
+    ) -> Result<dto::DepositStatusResponse, ServiceError> {
+        let tx = self
+            .repo
+            .find_transaction_by_id(tx_id)
+            .await?
+            .ok_or_else(|| ServiceError::NotFound("Deposit not found".to_string()))?;
+
+        // Verify ownership
+        if tx.user_id != user_id {
+            return Err(ServiceError::Unauthorized(
+                "Access denied to this deposit".to_string(),
+            ));
+        }
+
+        Ok(dto::DepositStatusResponse {
+            deposit_id: tx.tx_id.clone(),
+            transaction_id: tx.tx_id,
+            amount_vnd: tx.vnd_amount.unwrap_or(0),
+            trust_amount: tx.amount,
+            payment_method: "3RD_PARTY".to_string(), // TODO: Store in transaction
+            status: format!("{:?}", tx.status),
+            payment_gateway_ref: tx.external_ref,
+            created_at: tx.created_at.to_string(),
+            completed_at: tx.completed_at.map(|t| t.to_string()),
+            expires_at: None, // TODO: Store in transaction
+        })
+    }
+
+    /// Get user's deposit history
+    pub async fn get_deposit_history(
+        &self,
+        user_id: &str,
+        page: i64,
+        per_page: i64,
+    ) -> Result<dto::DepositHistoryResponse, ServiceError> {
+        let skip = ((page - 1) * per_page).max(0) as u64;
+        let limit = per_page as u64;
+
+        let transactions = self
+            .repo
+            .find_transactions_by_user(user_id, skip, limit)
+            .await?;
+
+        let total = self
+            .repo
+            .count_transactions_by_user(user_id)
+            .await? as i64;
+
+        let deposits: Vec<dto::DepositHistoryItem> = transactions
+            .into_iter()
+            .filter(|tx| {
+                matches!(
+                    tx.tx_type,
+                    TransactionType::DepositPending
+                        | TransactionType::DepositVndReceived
+                        | TransactionType::DepositTrustCredited
+                        | TransactionType::DepositManual
+                )
+            })
+            .map(|tx| dto::DepositHistoryItem {
+                deposit_id: tx.tx_id.clone(),
+                transaction_id: tx.tx_id,
+                amount_vnd: tx.vnd_amount.unwrap_or(0),
+                trust_amount: tx.amount,
+                payment_method: match tx.tx_type {
+                    TransactionType::DepositPending => "PENDING".to_string(),
+                    TransactionType::DepositTrustCredited => "COMPLETED".to_string(),
+                    TransactionType::DepositManual => "MANUAL".to_string(),
+                    _ => "OTHER".to_string(),
+                },
+                status: format!("{:?}", tx.status),
+                created_at: tx.created_at.to_string(),
+                completed_at: tx.completed_at.map(|t| t.to_string()),
+            })
+            .collect();
+
+        Ok(dto::DepositHistoryResponse {
+            deposits,
+            total,
+            page,
+            per_page,
+        })
+    }
+
+    /// Admin manual deposit
+    pub async fn admin_manual_deposit(
+        &self,
+        req: dto::AdminManualDepositRequest,
+        admin_id: String,
+    ) -> Result<dto::DepositStatusResponse, ServiceError> {
+        // Get or create target wallet
+        let mut wallet = match self
+            .repo
+            .find_wallet_by_user_id(&req.target_user_id)
+            .await?
+        {
+            Some(w) => w,
+            None => {
+                // Auto-create wallet if doesn't exist
+                let wallet_id = Self::generate_id("WAL");
+                let new_wallet = Wallet::new_user(req.target_user_id.clone(), wallet_id.clone());
+                self.repo.create_wallet(new_wallet.clone()).await?;
+                new_wallet
+            }
+        };
+
+        let balance_before = wallet.available_trust;
+        let balance_after = balance_before + req.trust_amount;
+
+        // Create transaction
+        let tx_id = Self::generate_id("TXN");
+        let mut tx = Transaction::new(
+            tx_id.clone(),
+            wallet.wallet_id.clone(),
+            wallet.user_id.clone(),
+            TransactionType::DepositManual,
+            Direction::Credit,
+            req.trust_amount,
+            balance_before,
+            balance_after,
+            BalanceType::Available,
+            admin_id.clone(),
+        );
+        tx.admin_note = Some(req.reason.clone());
+
+        // Update wallet
+        wallet.available_trust += req.trust_amount;
+        wallet.total_trust += req.trust_amount;
+        wallet.lifetime_deposited += req.trust_amount;
+
+        // Validate invariant
+        Self::validate_invariant(&wallet)?;
+
+        // Save to database
+        self.repo.create_transaction(tx.clone()).await?;
+        self.repo.update_wallet(&wallet).await?;
+
+        // Create admin log
+        let log = AdminOperationLog {
+            id: None,
+            log_id: Self::generate_id("ALOG"),
+            admin_id: admin_id.clone(),
+            admin_email: "admin@example.com".to_string(), // TODO: Get from context
+            admin_role: "ADMIN".to_string(),
+            operation: AdminOperation::ManualDeposit,
+            target_type: TargetType::Wallet,
+            target_id: wallet.wallet_id.clone(),
+            before_state: serde_json::json!({"available_trust": balance_before}),
+            after_state: serde_json::json!({"available_trust": balance_after}),
+            amount: Some(req.trust_amount),
+            reason: req.reason,
+            note: req.note,
+            transaction_id: Some(tx_id.clone()),
+            ip_address: "0.0.0.0".to_string(), // TODO: Get from request
+            user_agent: "".to_string(),
+            created_at: BsonDateTime::now(),
+        };
+        self.repo.create_admin_log(log).await?;
+
+        Ok(dto::DepositStatusResponse {
+            deposit_id: tx_id.clone(),
+            transaction_id: tx_id,
+            amount_vnd: req.trust_amount * 1000,
+            trust_amount: req.trust_amount,
+            payment_method: "MANUAL".to_string(),
+            status: "COMPLETED".to_string(),
+            payment_gateway_ref: None,
+            created_at: BsonDateTime::now().to_string(),
+            completed_at: Some(BsonDateTime::now().to_string()),
+            expires_at: None,
+        })
+    }
+
+    /// Admin get all deposits history
+    pub async fn admin_get_deposits_history(
+        &self,
+        page: i64,
+        per_page: i64,
+        status: Option<String>,
+        user_id: Option<String>,
+    ) -> Result<dto::DepositHistoryResponse, ServiceError> {
+        let skip = ((page - 1) * per_page).max(0) as u64;
+        let limit = per_page as u64;
+
+        // Filter transactions by type and optional status/user
+        let all_transactions = self
+            .repo
+            .find_all_transactions(skip, limit)
+            .await?;
+
+        let filtered_transactions: Vec<Transaction> = all_transactions
+            .into_iter()
+            .filter(|tx| {
+                // Filter by deposit type
+                let is_deposit = matches!(
+                    tx.tx_type,
+                    TransactionType::DepositPending
+                        | TransactionType::DepositVndReceived
+                        | TransactionType::DepositTrustCredited
+                        | TransactionType::DepositManual
+                );
+
+                // Filter by status if provided
+                let status_match = if let Some(ref s) = status {
+                    format!("{:?}", tx.status) == s.to_uppercase()
+                } else {
+                    true
+                };
+
+                // Filter by user if provided
+                let user_match = if let Some(ref uid) = user_id {
+                    &tx.user_id == uid
+                } else {
+                    true
+                };
+
+                is_deposit && status_match && user_match
+            })
+            .collect();
+
+        // For simplicity, we'll return just the filtered count as total
+        // In production, you'd want to do this properly with database aggregation
+        let total = filtered_transactions.len() as i64;
+
+        let deposits: Vec<dto::DepositHistoryItem> = filtered_transactions
+            .into_iter()
+            .map(|tx| dto::DepositHistoryItem {
+                deposit_id: tx.tx_id.clone(),
+                transaction_id: tx.tx_id.clone(),
+                amount_vnd: tx.vnd_amount.unwrap_or(0),
+                trust_amount: tx.amount,
+                payment_method: match tx.tx_type {
+                    TransactionType::DepositPending => "PENDING".to_string(),
+                    TransactionType::DepositTrustCredited => "COMPLETED".to_string(),
+                    TransactionType::DepositManual => "MANUAL".to_string(),
+                    _ => "OTHER".to_string(),
+                },
+                status: format!("{:?}", tx.status),
+                created_at: tx.created_at.to_string(),
+                completed_at: tx.completed_at.map(|t| t.to_string()),
+            })
+            .collect();
+
+        Ok(dto::DepositHistoryResponse {
+            deposits,
+            total,
+            page,
+            per_page,
+        })
     }
 
     // ========================================================================

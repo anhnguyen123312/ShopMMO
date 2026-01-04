@@ -285,8 +285,8 @@ impl WalletService {
     // ADMIN: TRANSACTION HISTORY & LOGS
     // ========================================================================
 
-    /// Get transaction history for a wallet
-    pub async fn get_transaction_history(
+    /// Get transaction history for a wallet (admin version)
+    pub async fn get_transaction_history_admin(
         &self,
         wallet_id: &str,
         limit: Option<i64>,

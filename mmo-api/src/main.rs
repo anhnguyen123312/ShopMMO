@@ -74,6 +74,11 @@ async fn main() -> std::io::Result<()> {
 
     // Initialize services (wallet before auth since auth depends on wallet)
     let wallet_service = Arc::new(modules::wallet::WalletService::new(wallet_repo));
+    let wallet_cron_manager = Arc::new(modules::wallet::WalletCronManager::new(wallet_service.clone()));
+
+    // Start wallet background jobs (escrow auto-release, reconciliation, USDT monitor)
+    wallet_cron_manager.start();
+
     let auth_service = Arc::new(modules::auth::AuthService::new(
         user_repo,
         token_repo,
@@ -107,6 +112,7 @@ async fn main() -> std::io::Result<()> {
             // App data (dependency injection)
             .app_data(web::Data::new(auth_service.clone()))
             .app_data(web::Data::new(wallet_service.clone()))
+            .app_data(web::Data::new(wallet_cron_manager.clone()))
             .app_data(web::Data::new(permission_service.clone()))
             .app_data(web::Data::from(Arc::new(config.clone())))
             // Health check endpoint

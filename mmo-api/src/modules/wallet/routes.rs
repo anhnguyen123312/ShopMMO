@@ -5,10 +5,13 @@
 use actix_web::web;
 use super::handler;
 
-/// Configure wallet routes
+/// Configure ALL wallet routes
 pub fn configure(cfg: &mut web::ServiceConfig) {
+    // ========================================================================
+    // INTERNAL APIs (Admin tools, microservice communication)
+    // ========================================================================
     cfg.service(
-        web::scope("/wallet")
+        web::scope("/internal/wallet")
             // ============== WALLET MANAGEMENT ==============
             .route("/balance", web::get().to(handler::get_balance))
             .route("/create", web::post().to(handler::create_wallet))
@@ -43,5 +46,35 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
 
             // ============== BACKGROUND JOBS (Internal/Cron) ==============
             .route("/jobs/auto-release", web::post().to(handler::process_auto_releases))
+    );
+
+    // ========================================================================
+    // PUBLIC APIs (V3) - External clients (Mobile, Web, 3rd parties)
+    // ========================================================================
+
+    // ============== V3 USER WALLET APIs ==============
+    cfg.service(
+        web::scope("/api/v3/wallet")
+            // ============== DEPOSIT ENDPOINTS ==============
+            .route("/deposit/initiate", web::post().to(handler::initiate_deposit))
+            .route("/deposit/webhook", web::post().to(handler::deposit_webhook))
+            .route("/deposit/status/{tx_id}", web::get().to(handler::get_deposit_status))
+            .route("/deposits/history", web::get().to(handler::get_deposit_history))
+    );
+
+    // ============== V3 ADMIN WALLET APIs ==============
+    cfg.service(
+        web::scope("/api/v3/admin/wallets")
+            // ============== DEPOSIT MANAGEMENT ==============
+            .route("/deposit", web::post().to(handler::admin_manual_deposit))
+            .route("/deposits/history", web::get().to(handler::admin_get_deposits_history))
+
+            // ============== DASHBOARD & MONITORING ==============
+            .route("/dashboard", web::get().to(handler::get_dashboard_stats))
+            .route("/reconcile", web::post().to(handler::trigger_reconciliation))
+
+            // ============== CRON JOB CONTROLS ==============
+            .route("/cron/start", web::post().to(handler::start_cron_jobs))
+            .route("/cron/stop", web::post().to(handler::stop_cron_jobs))
     );
 }

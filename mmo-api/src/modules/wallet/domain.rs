@@ -200,6 +200,7 @@ pub enum TransactionType {
     DepositVndReceived,
     DepositTrustCredited,
     DepositManual,
+    DepositUsdt,
 
     // === Withdrawal ===
     WithdrawalRequest,
@@ -845,5 +846,162 @@ impl Transaction {
         self.status_history.push(change);
         self.status = to_status;
         self.updated_at = BsonDateTime::now();
+    }
+}
+
+// ============================================================================
+// USDT DEPOSIT MODEL - TRC20 Network Support
+// ============================================================================
+
+/// USDT Deposit document for TRC20 network deposits
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsdtDeposit {
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    pub id: Option<ObjectId>,
+
+    /// Unique deposit ID: USDT-{ULID}
+    pub deposit_id: String,
+
+    pub wallet_id: String,
+    pub user_id: String,
+
+    // === USDT Details ===
+    /// USDT amount (float precision for crypto)
+    pub usdt_amount: f64,
+
+    /// Blockchain network
+    pub network: UsdtNetwork,
+
+    /// Sender's blockchain address
+    pub sender_address: String,
+
+    /// Transaction hash on blockchain
+    pub transaction_hash: String,
+
+    /// Block number for confirmation tracking
+    pub block_number: i64,
+
+    // === Conversion ===
+    /// VND amount (usdt_amount * exchange_rate)
+    pub vnd_amount: i64,
+
+    /// Trust amount (vnd_amount / 1000)
+    pub trust_amount: i64,
+
+    /// Exchange rate used (USDT to VND)
+    pub exchange_rate: f64,
+
+    // === Status & Confirmations ===
+    pub status: UsdtDepositStatus,
+
+    /// Current confirmation count
+    #[serde(default)]
+    pub confirmations: i32,
+
+    /// Required confirmations (usually 20 for TRC20)
+    #[serde(default)]
+    pub required_confirmations: i32,
+
+    // === Processing ===
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub credited_at: Option<BsonDateTime>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failed_reason: Option<String>,
+
+    // === Memo/Reference ===
+    /// User-provided memo for tracking
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memo: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_id: Option<String>,
+
+    // === Timestamps ===
+    pub created_at: BsonDateTime,
+    pub updated_at: BsonDateTime,
+}
+
+/// Supported USDT networks
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum UsdtNetwork {
+    /// TRC20 (Tron network) - Low fees, fast
+    Trc20,
+    /// BEP20 (BSC) - Future support
+    Bec20,
+    /// ERC20 (Ethereum) - Future support
+    Erc20,
+}
+
+/// USDT deposit status
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum UsdtDepositStatus {
+    /// Deposit detected, waiting for confirmations
+    Pending,
+    /// Gathering confirmations
+    Confirming,
+    /// Required confirmations reached, ready to credit
+    Confirmed,
+    /// Successfully credited to wallet
+    Credited,
+    /// Deposit failed (invalid amount, network error, etc.)
+    Failed,
+    /// Ignored (no memo or invalid memo)
+    Ignored,
+}
+
+impl UsdtDeposit {
+    /// Create new USDT deposit
+    pub fn new(
+        deposit_id: String,
+        wallet_id: String,
+        user_id: String,
+        usdt_amount: f64,
+        network: UsdtNetwork,
+        sender_address: String,
+        transaction_hash: String,
+        block_number: i64,
+        exchange_rate: f64,
+    ) -> Self {
+        let vnd_amount = (usdt_amount * exchange_rate) as i64;
+        let trust_amount = vnd_amount / 1000;
+
+        let now = BsonDateTime::now();
+        Self {
+            id: None,
+            deposit_id,
+            wallet_id,
+            user_id,
+            usdt_amount,
+            network,
+            sender_address,
+            transaction_hash,
+            block_number,
+            vnd_amount,
+            trust_amount,
+            exchange_rate,
+            status: UsdtDepositStatus::Pending,
+            confirmations: 0,
+            required_confirmations: 20, // TRC20 standard
+            credited_at: None,
+            failed_reason: None,
+            memo: None,
+            transaction_id: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    /// Check if deposit has enough confirmations
+    pub fn has_enough_confirmations(&self) -> bool {
+        self.confirmations >= self.required_confirmations
+    }
+
+    /// Check if deposit can be credited
+    pub fn can_credit(&self) -> bool {
+        self.status == UsdtDepositStatus::Confirmed
+            || (self.status == UsdtDepositStatus::Confirming && self.has_enough_confirmations())
     }
 }

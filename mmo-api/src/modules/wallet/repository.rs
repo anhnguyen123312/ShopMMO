@@ -5,7 +5,10 @@
 use bson::{doc, oid::ObjectId, DateTime as BsonDateTime};
 use mongodb::{Collection, Database, Client, options::{FindOneOptions, FindOptions}, ClientSession};
 use futures::stream::TryStreamExt;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::sync::Arc;
+use chrono::{TimeZone, Datelike, Timelike};
 
 use crate::core::error::DbError;
 use crate::database::MongoDB;
@@ -23,6 +26,7 @@ pub struct WalletRepository {
     monthly_snapshots: Collection<MonthlySnapshot>,
     admin_operation_logs: Collection<AdminOperationLog>,
     shop_commission_configs: Collection<ShopCommissionConfig>,
+    usdt_deposits: Collection<UsdtDeposit>,
 }
 
 impl WalletRepository {
@@ -38,6 +42,7 @@ impl WalletRepository {
             monthly_snapshots: database.collection("monthly_snapshots"),
             admin_operation_logs: database.collection("admin_operation_logs"),
             shop_commission_configs: database.collection("shop_commission_configs"),
+            usdt_deposits: database.collection("usdt_deposits"),
         }
     }
 
@@ -164,6 +169,64 @@ impl WalletRepository {
             .session(&mut *session)
             .await?;
         Ok(tx)
+    }
+
+    /// Find transaction by ID
+    pub async fn find_transaction_by_id(&self, tx_id: &str) -> Result<Option<Transaction>, DbError> {
+        let tx = self
+            .transactions
+            .find_one(doc! { "tx_id": tx_id })
+            .await?;
+        Ok(tx)
+    }
+
+    /// Update transaction
+    pub async fn update_transaction(&self, tx: &Transaction) -> Result<(), DbError> {
+        self.transactions
+            .update_one(doc! { "tx_id": &tx.tx_id }, doc! { "$set": mongodb::bson::to_document(tx)? })
+            .await?;
+        Ok(())
+    }
+
+    /// Find transactions by user_id
+    pub async fn find_transactions_by_user(
+        &self,
+        user_id: &str,
+        skip: u64,
+        limit: u64,
+    ) -> Result<Vec<Transaction>, DbError> {
+        let cursor = self.transactions
+            .find(doc! { "user_id": user_id })
+            .sort(doc! { "created_at": -1 })
+            .skip(skip as u64)
+            .limit(limit as i64)
+            .await?;
+        let transactions: Vec<Transaction> = cursor.try_collect().await?;
+        Ok(transactions)
+    }
+
+    /// Count transactions by user_id
+    pub async fn count_transactions_by_user(&self, user_id: &str) -> Result<u64, DbError> {
+        let count = self.transactions
+            .count_documents(doc! { "user_id": user_id })
+            .await?;
+        Ok(count as u64)
+    }
+
+    /// Find all transactions (with pagination)
+    pub async fn find_all_transactions(
+        &self,
+        skip: u64,
+        limit: u64,
+    ) -> Result<Vec<Transaction>, DbError> {
+        let cursor = self.transactions
+            .find(doc! {})
+            .sort(doc! { "created_at": -1 })
+            .skip(skip as u64)
+            .limit(limit as i64)
+            .await?;
+        let transactions: Vec<Transaction> = cursor.try_collect().await?;
+        Ok(transactions)
     }
 
     /// Find transactions by wallet_id
@@ -630,4 +693,313 @@ impl WalletRepository {
             .await?;
         Ok(())
     }
+
+    // ========================================================================
+    // USDT DEPOSIT REPOSITORY METHODS
+    // ========================================================================
+
+    /// Create USDT deposit
+    pub async fn create_usdt_deposit(&self, deposit: &UsdtDeposit) -> Result<UsdtDeposit, DbError> {
+        self.usdt_deposits.insert_one(deposit).await?;
+        Ok(deposit.clone())
+    }
+
+    /// Find USDT deposit by ID
+    pub async fn find_usdt_deposit_by_id(&self, deposit_id: &str) -> Result<Option<UsdtDeposit>, DbError> {
+        self.usdt_deposits
+            .find_one(doc! { "deposit_id": deposit_id })
+            .await
+            .map_err(Into::into)
+    }
+
+    /// Find USDT deposit by transaction hash (idempotent check)
+    pub async fn find_usdt_deposit_by_tx_hash(
+        &self,
+        transaction_hash: &str,
+    ) -> Result<Option<UsdtDeposit>, DbError> {
+        self.usdt_deposits
+            .find_one(doc! { "transaction_hash": transaction_hash })
+            .await
+            .map_err(Into::into)
+    }
+
+    /// Update USDT deposit
+    pub async fn update_usdt_deposit(&self, deposit: &UsdtDeposit) -> Result<UsdtDeposit, DbError> {
+        let updated_deposit = UsdtDeposit {
+            id: deposit.id.clone(),
+            deposit_id: deposit.deposit_id.clone(),
+            wallet_id: deposit.wallet_id.clone(),
+            user_id: deposit.user_id.clone(),
+            usdt_amount: deposit.usdt_amount,
+            network: deposit.network.clone(),
+            sender_address: deposit.sender_address.clone(),
+            transaction_hash: deposit.transaction_hash.clone(),
+            block_number: deposit.block_number,
+            vnd_amount: deposit.vnd_amount,
+            trust_amount: deposit.trust_amount,
+            exchange_rate: deposit.exchange_rate,
+            status: deposit.status.clone(),
+            confirmations: deposit.confirmations,
+            required_confirmations: deposit.required_confirmations,
+            credited_at: deposit.credited_at,
+            failed_reason: deposit.failed_reason.clone(),
+            memo: deposit.memo.clone(),
+            transaction_id: deposit.transaction_id.clone(),
+            updated_at: BsonDateTime::now(),
+            created_at: deposit.created_at,
+        };
+
+        self.usdt_deposits
+            .update_one(
+                doc! { "deposit_id": &deposit.deposit_id },
+                doc! { "$set": bson::to_bson(&updated_deposit).map_err(|e| DbError::SerializationError(e.to_string()))? }
+            )
+            .await?;
+
+        Ok(updated_deposit)
+    }
+
+    /// Update USDT deposit confirmations
+    pub async fn update_usdt_deposit_confirmations(
+        &self,
+        deposit_id: &str,
+        confirmations: i32,
+        status: UsdtDepositStatus,
+    ) -> Result<(), DbError> {
+        use serde_json;
+        let status_str = json!(status).as_str().unwrap_or("Pending").to_string();
+        self.usdt_deposits
+            .update_one(
+                doc! { "deposit_id": deposit_id },
+                doc! {
+                    "$set": {
+                        "confirmations": confirmations,
+                        "status": status_str,
+                        "updated_at": BsonDateTime::now()
+                    }
+                },
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Get USDT deposits by user
+    pub async fn get_usdt_deposits_by_user(
+        &self,
+        user_id: &str,
+        limit: i64,
+    ) -> Result<Vec<UsdtDeposit>, DbError> {
+        let cursor = self
+            .usdt_deposits
+            .find(doc! { "user_id": user_id })
+            .sort(doc! { "created_at": -1 })
+            .limit(limit)
+            .await?;
+        cursor.try_collect().await.map_err(Into::into)
+    }
+
+    /// Get USDT deposits by status (for monitoring)
+    pub async fn get_usdt_deposits_by_status(
+        &self,
+        status: UsdtDepositStatus,
+        limit: i64,
+    ) -> Result<Vec<UsdtDeposit>, DbError> {
+        use serde_json;
+        let status_str = json!(status).as_str().unwrap_or("Pending").to_string();
+        let cursor = self
+            .usdt_deposits
+            .find(doc! { "status": status_str })
+            .sort(doc! { "created_at": 1 })
+            .limit(limit)
+            .await?;
+        cursor.try_collect().await.map_err(Into::into)
+    }
+
+    /// Get pending USDT deposits older than specified blocks
+    pub async fn get_old_pending_deposits(
+        &self,
+        max_block_age: i64,
+    ) -> Result<Vec<UsdtDeposit>, DbError> {
+        // Get latest block number would be passed from service
+        // For now, return all pending deposits
+        self.get_usdt_deposits_by_status(UsdtDepositStatus::Pending, 100)
+            .await
+    }
+
+    /// Get all USDT deposits (admin)
+    pub async fn get_all_usdt_deposits(
+        &self,
+        page: i64,
+        per_page: i64,
+    ) -> Result<(Vec<UsdtDeposit>, i64), DbError> {
+        let skip = (page - 1) * per_page;
+
+        let total = self
+            .usdt_deposits
+            .count_documents(doc! {})
+            .await
+            .map_err::<mongodb::error::Error, _>(Into::into)?;
+
+        let cursor = self
+            .usdt_deposits
+            .find(doc! {})
+            .sort(doc! { "created_at": -1 })
+            .skip(skip as u64)
+            .limit(per_page)
+            .await?;
+
+        let deposits: Vec<UsdtDeposit> = cursor.try_collect().await.map_err::<mongodb::error::Error, _>(Into::into)?;
+
+        Ok((deposits, total as i64))
+    }
+
+    /// Get USDT deposits summary
+    pub async fn get_usdt_deposits_summary(&self) -> Result<UsdtDepositsSummary, DbError> {
+        let pipeline = vec![
+            doc! {
+                "$group": {
+                    "_id": "$status",
+                    "count": doc! { "$sum": 1 },
+                    "total_usdt": doc! { "$sum": "$usdt_amount" },
+                    "total_vnd": doc! { "$sum": "$vnd_amount" }
+                }
+            },
+        ];
+
+        let mut cursor = self.usdt_deposits.aggregate(pipeline).await?;
+
+        let mut summary = UsdtDepositsSummary::default();
+
+        use mongodb::bson::{Document, Bson};
+        while let Some(result) = cursor.try_next().await.map_err(|e| DbError::MongoError(e.to_string()))? {
+            let status_str = result.get_str("_id").unwrap_or("Unknown");
+            let count = result.get_i64("count").unwrap_or(0);
+            let total_usdt = result.get_f64("total_usdt").unwrap_or(0.0);
+            let total_vnd = result.get_i64("total_vnd").unwrap_or(0);
+
+            match status_str {
+                "Credited" => {
+                    summary.credited_count = count;
+                    summary.credited_usdt = total_usdt;
+                    summary.credited_vnd = total_vnd;
+                }
+                "Pending" | "Confirming" => {
+                    summary.pending_count += count;
+                    summary.pending_usdt += total_usdt;
+                    summary.pending_vnd += total_vnd;
+                }
+                "Failed" | "Ignored" => {
+                    summary.failed_count += count;
+                    summary.failed_usdt += total_usdt;
+                    summary.failed_vnd += total_vnd;
+                }
+                _ => {}
+            }
+        }
+
+        Ok(summary)
+    }
+
+    /// Update USDT deposit with session
+    pub async fn update_usdt_deposit_with_session(
+        &self,
+        deposit: &UsdtDeposit,
+        session: &mut ClientSession,
+    ) -> Result<(), DbError> {
+        let mut updated = deposit.clone();
+        updated.updated_at = BsonDateTime::now();
+
+        self.usdt_deposits
+            .replace_one(doc! { "deposit_id": &deposit.deposit_id }, &updated)
+            .session(&mut *session)
+            .await?;
+        Ok(())
+    }
+
+    // ========================================================================
+    // RECONCILIATION & DASHBOARD METHODS
+    // ========================================================================
+
+    /// Get all wallets for reconciliation (paginated)
+    pub async fn find_all_wallets_for_reconciliation(
+        &self,
+        limit: u64,
+        skip: u64,
+    ) -> Result<Vec<Wallet>, DbError> {
+        // Use skip/limit in the query chain directly
+        let cursor = self.wallets
+            .find(doc! {})
+            .skip(skip as u64)
+            .limit(limit as i64)
+            .await
+            .map_err(DbError::from)?;
+
+        let wallets = cursor.try_collect().await?;
+        Ok(wallets)
+    }
+
+    /// Count active escrows (status = Holding)
+    pub async fn count_active_escrows(&self) -> Result<u64, DbError> {
+        let count = self
+            .escrow_holds
+            .count_documents(doc! { "status": "HOLDING" })
+            .await?;
+        Ok(count)
+    }
+
+    /// Get transaction stats for current month (for dashboard stats)
+    pub async fn get_monthly_transaction_stats(
+        &self,
+    ) -> Result<(u64, i64), DbError> {
+        let now = chrono::Utc::now();
+        // Use first day of current month at 00:00:00
+        let start_of_month = now.date_naive()
+            .and_hms_opt(0, 0, 0)
+            .map(|dt| chrono::Utc.from_utc_datetime(&dt))
+            .unwrap_or(now);
+
+        let pipeline = vec![
+            doc! {
+                "$match": {
+                    "created_at": { "$gte": start_of_month }
+                }
+            },
+            doc! {
+                "$group": {
+                    "_id": null,
+                    "count": doc! { "$sum": 1 },
+                    "volume": doc! { "$sum": "$amount" }
+                }
+            },
+        ];
+
+        let mut cursor = self.transactions.aggregate(pipeline).await?;
+        let result = cursor.try_next().await?;
+
+        match result {
+            Some(doc) => {
+                let count = doc.get_i64("count").unwrap_or(0) as u64;
+                let volume = doc.get_i64("volume").unwrap_or(0);
+                Ok((count, volume))
+            }
+            None => Ok((0, 0)),
+        }
+    }
 }
+
+/// USDT deposits summary
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct UsdtDepositsSummary {
+    pub pending_count: i64,
+    pub pending_usdt: f64,
+    pub pending_vnd: i64,
+
+    pub credited_count: i64,
+    pub credited_usdt: f64,
+    pub credited_vnd: i64,
+
+    pub failed_count: i64,
+    pub failed_usdt: f64,
+    pub failed_vnd: i64,
+}
+
