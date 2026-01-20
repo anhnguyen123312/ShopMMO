@@ -28,3 +28,6 @@ coverage/
 # Production
 dist/
 build/
+
+# Git worktrees
+.worktrees/
