@@ -62,7 +62,6 @@ pub enum UserStatus {
     PendingVerification,
 }
 
-
 /// Refresh token document in MongoDB
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RefreshToken {
@@ -102,7 +101,14 @@ impl User {
     /// * `name` - User's display name
     /// * `role` - User's primary role (default: "BUYER")
     /// * `roles` - Optional array of additional roles
-    pub fn new(username: String, email: String, password_hash: String, name: String, role: Option<String>, roles: Option<Vec<String>>) -> Self {
+    pub fn new(
+        username: String,
+        email: String,
+        password_hash: String,
+        name: String,
+        role: Option<String>,
+        roles: Option<Vec<String>>,
+    ) -> Self {
         let now = DateTime::now();
         let default_role = role.unwrap_or_else(|| "BUYER".to_string());
         let default_roles = roles.unwrap_or_else(|| vec![default_role.clone()]);
@@ -155,5 +161,291 @@ impl RefreshToken {
             ip_address,
             user_agent,
         }
+    }
+
+    /// Checks if token is expired
+    pub fn is_expired(&self) -> bool {
+        self.expires_at < DateTime::now()
+    }
+
+    /// Checks if token is valid (not revoked and not expired)
+    pub fn is_valid(&self) -> bool {
+        !self.revoked && !self.is_expired()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== UserStatus Tests ====================
+
+    #[test]
+    fn test_user_status_default_is_pending_verification() {
+        let status = UserStatus::default();
+        assert_eq!(status, UserStatus::PendingVerification);
+    }
+
+    #[test]
+    fn test_user_status_equality() {
+        assert_eq!(UserStatus::Active, UserStatus::Active);
+        assert_eq!(UserStatus::Suspended, UserStatus::Suspended);
+        assert_eq!(
+            UserStatus::PendingVerification,
+            UserStatus::PendingVerification
+        );
+        assert_ne!(UserStatus::Active, UserStatus::Suspended);
+        assert_ne!(UserStatus::Active, UserStatus::PendingVerification);
+    }
+
+    // ==================== User::new Tests ====================
+
+    #[test]
+    fn test_user_new_with_defaults() {
+        let user = User::new(
+            "testuser".to_string(),
+            "test@example.com".to_string(),
+            "hashed_password".to_string(),
+            "Test User".to_string(),
+            None,
+            None,
+        );
+
+        assert!(user.id.is_none());
+        assert_eq!(user.username, "testuser");
+        assert_eq!(user.email, "test@example.com");
+        assert_eq!(user.password_hash, "hashed_password");
+        assert_eq!(user.name, "Test User");
+        assert_eq!(user.role, "BUYER");
+        assert_eq!(user.roles, vec!["BUYER"]);
+        assert_eq!(user.perm_version, 1);
+        assert_eq!(user.status, UserStatus::PendingVerification);
+        assert!(!user.email_verified);
+        assert!(user.last_login_at.is_none());
+    }
+
+    #[test]
+    fn test_user_new_with_custom_role() {
+        let user = User::new(
+            "seller1".to_string(),
+            "seller@example.com".to_string(),
+            "hashed_password".to_string(),
+            "Seller One".to_string(),
+            Some("SELLER".to_string()),
+            None,
+        );
+
+        assert_eq!(user.role, "SELLER");
+        assert_eq!(user.roles, vec!["SELLER"]);
+    }
+
+    #[test]
+    fn test_user_new_with_custom_roles_array() {
+        let user = User::new(
+            "admin1".to_string(),
+            "admin@example.com".to_string(),
+            "hashed_password".to_string(),
+            "Admin One".to_string(),
+            Some("ADMIN".to_string()),
+            Some(vec!["ADMIN".to_string(), "MODERATOR".to_string()]),
+        );
+
+        assert_eq!(user.role, "ADMIN");
+        assert_eq!(user.roles, vec!["ADMIN", "MODERATOR"]);
+    }
+
+    #[test]
+    fn test_user_new_timestamps_are_set() {
+        let before = DateTime::now();
+        let user = User::new(
+            "timeuser".to_string(),
+            "time@example.com".to_string(),
+            "hash".to_string(),
+            "Time User".to_string(),
+            None,
+            None,
+        );
+        let after = DateTime::now();
+
+        // created_at and updated_at should be between before and after
+        assert!(user.created_at >= before);
+        assert!(user.created_at <= after);
+        assert!(user.updated_at >= before);
+        assert!(user.updated_at <= after);
+    }
+
+    // ==================== User::is_active Tests ====================
+
+    #[test]
+    fn test_user_is_active_when_active() {
+        let mut user = User::new(
+            "activeuser".to_string(),
+            "active@example.com".to_string(),
+            "hash".to_string(),
+            "Active User".to_string(),
+            None,
+            None,
+        );
+        user.status = UserStatus::Active;
+
+        assert!(user.is_active());
+    }
+
+    #[test]
+    fn test_user_is_not_active_when_suspended() {
+        let mut user = User::new(
+            "suspendeduser".to_string(),
+            "suspended@example.com".to_string(),
+            "hash".to_string(),
+            "Suspended User".to_string(),
+            None,
+            None,
+        );
+        user.status = UserStatus::Suspended;
+
+        assert!(!user.is_active());
+    }
+
+    #[test]
+    fn test_user_is_not_active_when_pending_verification() {
+        let user = User::new(
+            "pendinguser".to_string(),
+            "pending@example.com".to_string(),
+            "hash".to_string(),
+            "Pending User".to_string(),
+            None,
+            None,
+        );
+        // Default status is PendingVerification
+
+        assert!(!user.is_active());
+    }
+
+    // ==================== RefreshToken::new Tests ====================
+
+    #[test]
+    fn test_refresh_token_new_basic() {
+        let user_id = ObjectId::new();
+        let expires_at = DateTime::now();
+
+        let token = RefreshToken::new(
+            user_id,
+            "jwt_token_string".to_string(),
+            expires_at,
+            None,
+            None,
+        );
+
+        assert!(token.id.is_none());
+        assert_eq!(token.user_id, user_id);
+        assert_eq!(token.token, "jwt_token_string");
+        assert_eq!(token.expires_at, expires_at);
+        assert!(!token.revoked);
+        assert!(token.ip_address.is_none());
+        assert!(token.user_agent.is_none());
+    }
+
+    #[test]
+    fn test_refresh_token_new_with_metadata() {
+        let user_id = ObjectId::new();
+        let expires_at = DateTime::now();
+
+        let token = RefreshToken::new(
+            user_id,
+            "jwt_token_string".to_string(),
+            expires_at,
+            Some("192.168.1.1".to_string()),
+            Some("Mozilla/5.0".to_string()),
+        );
+
+        assert_eq!(token.ip_address, Some("192.168.1.1".to_string()));
+        assert_eq!(token.user_agent, Some("Mozilla/5.0".to_string()));
+    }
+
+    #[test]
+    fn test_refresh_token_created_at_is_set() {
+        let user_id = ObjectId::new();
+        let before = DateTime::now();
+
+        let token = RefreshToken::new(
+            user_id,
+            "jwt_token".to_string(),
+            DateTime::now(),
+            None,
+            None,
+        );
+
+        let after = DateTime::now();
+
+        assert!(token.created_at >= before);
+        assert!(token.created_at <= after);
+    }
+
+    // ==================== RefreshToken::is_expired Tests ====================
+
+    #[test]
+    fn test_refresh_token_is_expired_when_past() {
+        let user_id = ObjectId::new();
+        // Set expires_at to 1 hour ago
+        let past = DateTime::from_millis(DateTime::now().timestamp_millis() - 3600 * 1000);
+
+        let token = RefreshToken::new(user_id, "expired_token".to_string(), past, None, None);
+
+        assert!(token.is_expired());
+    }
+
+    #[test]
+    fn test_refresh_token_is_not_expired_when_future() {
+        let user_id = ObjectId::new();
+        // Set expires_at to 1 hour from now
+        let future = DateTime::from_millis(DateTime::now().timestamp_millis() + 3600 * 1000);
+
+        let token = RefreshToken::new(user_id, "valid_token".to_string(), future, None, None);
+
+        assert!(!token.is_expired());
+    }
+
+    // ==================== RefreshToken::is_valid Tests ====================
+
+    #[test]
+    fn test_refresh_token_is_valid_when_not_revoked_and_not_expired() {
+        let user_id = ObjectId::new();
+        let future = DateTime::from_millis(DateTime::now().timestamp_millis() + 3600 * 1000);
+
+        let token = RefreshToken::new(user_id, "valid_token".to_string(), future, None, None);
+
+        assert!(token.is_valid());
+    }
+
+    #[test]
+    fn test_refresh_token_is_not_valid_when_revoked() {
+        let user_id = ObjectId::new();
+        let future = DateTime::from_millis(DateTime::now().timestamp_millis() + 3600 * 1000);
+
+        let mut token = RefreshToken::new(user_id, "revoked_token".to_string(), future, None, None);
+        token.revoked = true;
+
+        assert!(!token.is_valid());
+    }
+
+    #[test]
+    fn test_refresh_token_is_not_valid_when_expired() {
+        let user_id = ObjectId::new();
+        let past = DateTime::from_millis(DateTime::now().timestamp_millis() - 3600 * 1000);
+
+        let token = RefreshToken::new(user_id, "expired_token".to_string(), past, None, None);
+
+        assert!(!token.is_valid());
+    }
+
+    #[test]
+    fn test_refresh_token_is_not_valid_when_both_revoked_and_expired() {
+        let user_id = ObjectId::new();
+        let past = DateTime::from_millis(DateTime::now().timestamp_millis() - 3600 * 1000);
+
+        let mut token = RefreshToken::new(user_id, "bad_token".to_string(), past, None, None);
+        token.revoked = true;
+
+        assert!(!token.is_valid());
     }
 }

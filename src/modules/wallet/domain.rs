@@ -1711,3 +1711,754 @@ impl DisputeCase {
         self.updated_at = now;
     }
 }
+
+// ============================================================================
+// UNIT TESTS
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ========================================================================
+    // WALLET TESTS
+    // ========================================================================
+
+    mod wallet_tests {
+        use super::*;
+
+        #[test]
+        fn test_new_user_wallet_defaults() {
+            let wallet = Wallet::new_user("user123".to_string(), "WLT-user123".to_string());
+
+            assert_eq!(wallet.user_id, "user123");
+            assert_eq!(wallet.wallet_id, "WLT-user123");
+            assert_eq!(wallet.wallet_type, WalletType::User);
+            assert_eq!(wallet.available_trust, 0);
+            assert_eq!(wallet.withdrawal_locked, 0);
+            assert_eq!(wallet.dispute_locked, 0);
+            assert_eq!(wallet.total_trust, 0);
+            assert_eq!(wallet.lifetime_deposited, 0);
+            assert_eq!(wallet.lifetime_withdrawn, 0);
+            assert_eq!(wallet.lifetime_spent, 0);
+            assert_eq!(wallet.lifetime_received, 0);
+            assert_eq!(wallet.commission_debt, 0);
+            assert_eq!(wallet.admin_debt, 0);
+            assert_eq!(wallet.status, WalletStatus::Active);
+            assert!(wallet.commission_rate.is_none());
+            assert!(wallet.freeze_reason.is_none());
+        }
+
+        #[test]
+        fn test_new_seller_wallet_with_commission() {
+            let wallet = Wallet::new_seller(
+                "seller123".to_string(),
+                "WLT-seller123".to_string(),
+                Some(0.05),
+            );
+
+            assert_eq!(wallet.wallet_type, WalletType::Seller);
+            assert_eq!(wallet.commission_rate, Some(0.05));
+            assert_eq!(wallet.user_id, "seller123");
+        }
+
+        #[test]
+        fn test_new_seller_wallet_without_commission() {
+            let wallet =
+                Wallet::new_seller("seller456".to_string(), "WLT-seller456".to_string(), None);
+
+            assert_eq!(wallet.wallet_type, WalletType::Seller);
+            assert!(wallet.commission_rate.is_none());
+        }
+
+        #[test]
+        fn test_new_platform_wallet() {
+            let wallet = Wallet::new_platform("WLT-PLATFORM".to_string());
+
+            assert_eq!(wallet.user_id, "PLATFORM");
+            assert_eq!(wallet.wallet_type, WalletType::Platform);
+            assert_eq!(wallet.wallet_id, "WLT-PLATFORM");
+        }
+
+        #[test]
+        fn test_balance_invariant_valid() {
+            let mut wallet = Wallet::new_user("user123".to_string(), "WLT-user123".to_string());
+            wallet.available_trust = 1000;
+            wallet.withdrawal_locked = 500;
+            wallet.dispute_locked = 200;
+            wallet.total_trust = 1700; // 1000 + 500 + 200
+
+            assert!(wallet.validate_balance_invariant());
+        }
+
+        #[test]
+        fn test_balance_invariant_invalid() {
+            let mut wallet = Wallet::new_user("user123".to_string(), "WLT-user123".to_string());
+            wallet.available_trust = 1000;
+            wallet.withdrawal_locked = 500;
+            wallet.dispute_locked = 200;
+            wallet.total_trust = 1500; // Wrong! Should be 1700
+
+            assert!(!wallet.validate_balance_invariant());
+        }
+
+        #[test]
+        fn test_is_active_true() {
+            let wallet = Wallet::new_user("user123".to_string(), "WLT-user123".to_string());
+            assert!(wallet.is_active());
+        }
+
+        #[test]
+        fn test_is_active_suspended() {
+            let mut wallet = Wallet::new_user("user123".to_string(), "WLT-user123".to_string());
+            wallet.status = WalletStatus::Suspended;
+            assert!(!wallet.is_active());
+        }
+
+        #[test]
+        fn test_is_active_frozen() {
+            let mut wallet = Wallet::new_user("user123".to_string(), "WLT-user123".to_string());
+            wallet.status = WalletStatus::Frozen;
+            assert!(!wallet.is_active());
+        }
+
+        #[test]
+        fn test_can_withdraw_success() {
+            let mut wallet = Wallet::new_user("user123".to_string(), "WLT-user123".to_string());
+            wallet.available_trust = 1000;
+            wallet.total_trust = 1000;
+
+            assert!(wallet.can_withdraw(500));
+            assert!(wallet.can_withdraw(1000));
+        }
+
+        #[test]
+        fn test_can_withdraw_insufficient_balance() {
+            let mut wallet = Wallet::new_user("user123".to_string(), "WLT-user123".to_string());
+            wallet.available_trust = 500;
+            wallet.total_trust = 500;
+
+            assert!(!wallet.can_withdraw(1000));
+        }
+
+        #[test]
+        fn test_can_withdraw_frozen_wallet() {
+            let mut wallet = Wallet::new_user("user123".to_string(), "WLT-user123".to_string());
+            wallet.available_trust = 1000;
+            wallet.total_trust = 1000;
+            wallet.status = WalletStatus::Frozen;
+
+            assert!(!wallet.can_withdraw(500));
+        }
+
+        #[test]
+        fn test_can_withdraw_with_admin_debt() {
+            let mut wallet = Wallet::new_user("user123".to_string(), "WLT-user123".to_string());
+            wallet.available_trust = 1000;
+            wallet.total_trust = 1000;
+            wallet.admin_debt = 100;
+
+            assert!(!wallet.can_withdraw(500));
+        }
+
+        #[test]
+        fn test_has_admin_debt() {
+            let mut wallet = Wallet::new_user("user123".to_string(), "WLT-user123".to_string());
+            assert!(!wallet.has_admin_debt());
+
+            wallet.admin_debt = 100;
+            assert!(wallet.has_admin_debt());
+        }
+
+        #[test]
+        fn test_total_debt_calculation() {
+            let mut wallet = Wallet::new_user("user123".to_string(), "WLT-user123".to_string());
+            wallet.commission_debt = 50;
+            wallet.admin_debt = 100;
+
+            assert_eq!(wallet.total_debt(), 150);
+        }
+
+        #[test]
+        fn test_total_debt_zero() {
+            let wallet = Wallet::new_user("user123".to_string(), "WLT-user123".to_string());
+            assert_eq!(wallet.total_debt(), 0);
+        }
+    }
+
+    // ========================================================================
+    // TRANSACTION TESTS
+    // ========================================================================
+
+    mod transaction_tests {
+        use super::*;
+
+        fn create_test_transaction() -> Transaction {
+            Transaction::new(
+                "TXN-test123".to_string(),
+                "WLT-user123".to_string(),
+                "user123".to_string(),
+                TransactionType::DepositTrustCredited,
+                Direction::Credit,
+                1000,
+                0,
+                1000,
+                BalanceType::Available,
+                "SYSTEM".to_string(),
+            )
+        }
+
+        #[test]
+        fn test_transaction_new_defaults() {
+            let tx = create_test_transaction();
+
+            assert_eq!(tx.tx_id, "TXN-test123");
+            assert_eq!(tx.wallet_id, "WLT-user123");
+            assert_eq!(tx.user_id, "user123");
+            assert_eq!(tx.tx_type, TransactionType::DepositTrustCredited);
+            assert_eq!(tx.direction, Direction::Credit);
+            assert_eq!(tx.amount, 1000);
+            assert_eq!(tx.balance_before, 0);
+            assert_eq!(tx.balance_after, 1000);
+            assert_eq!(tx.balance_type, BalanceType::Available);
+            assert_eq!(tx.status, TransactionStatus::Pending);
+            assert!(tx.status_history.is_empty());
+            assert_eq!(tx.fee_amount, 0);
+            assert!(tx.vnd_amount.is_none());
+            assert!(tx.reference_type.is_none());
+            assert!(tx.reference_id.is_none());
+        }
+
+        #[test]
+        fn test_add_status_change() {
+            let mut tx = create_test_transaction();
+            assert_eq!(tx.status, TransactionStatus::Pending);
+            assert!(tx.status_history.is_empty());
+
+            tx.add_status_change(
+                TransactionStatus::Processing,
+                "SYSTEM".to_string(),
+                Some("Processing deposit".to_string()),
+            );
+
+            assert_eq!(tx.status, TransactionStatus::Processing);
+            assert_eq!(tx.status_history.len(), 1);
+            assert_eq!(tx.status_history[0].from_status, TransactionStatus::Pending);
+            assert_eq!(
+                tx.status_history[0].to_status,
+                TransactionStatus::Processing
+            );
+            assert_eq!(tx.status_history[0].changed_by, "SYSTEM");
+            assert_eq!(
+                tx.status_history[0].reason,
+                Some("Processing deposit".to_string())
+            );
+        }
+
+        #[test]
+        fn test_add_multiple_status_changes() {
+            let mut tx = create_test_transaction();
+
+            tx.add_status_change(TransactionStatus::Processing, "SYSTEM".to_string(), None);
+            tx.add_status_change(
+                TransactionStatus::Completed,
+                "SYSTEM".to_string(),
+                Some("Deposit completed".to_string()),
+            );
+
+            assert_eq!(tx.status, TransactionStatus::Completed);
+            assert_eq!(tx.status_history.len(), 2);
+            assert_eq!(
+                tx.status_history[1].from_status,
+                TransactionStatus::Processing
+            );
+            assert_eq!(tx.status_history[1].to_status, TransactionStatus::Completed);
+        }
+    }
+
+    // ========================================================================
+    // DISPUTE CASE TESTS
+    // ========================================================================
+
+    mod dispute_tests {
+        use super::*;
+
+        fn create_test_dispute() -> DisputeCase {
+            DisputeCase::new_buyer_dispute(
+                "DSP-test123".to_string(),
+                "ESC-test123".to_string(),
+                EscrowStatus::Holding,
+                "ORD-test123".to_string(),
+                "buyer123".to_string(),
+                "seller123".to_string(),
+                10000,
+                "Item not as described".to_string(),
+                vec!["image1.jpg".to_string()],
+            )
+        }
+
+        #[test]
+        fn test_new_buyer_dispute() {
+            let dispute = create_test_dispute();
+
+            assert_eq!(dispute.dispute_id, "DSP-test123");
+            assert_eq!(dispute.escrow_id, "ESC-test123");
+            assert_eq!(dispute.order_id, "ORD-test123");
+            assert_eq!(dispute.buyer_id, "buyer123");
+            assert_eq!(dispute.seller_id, "seller123");
+            assert_eq!(dispute.amount, 10000);
+            assert_eq!(dispute.status, DisputeStatus::Pending);
+            assert_eq!(dispute.dispute_type, DisputeType::RefundRequest);
+            assert_eq!(dispute.buyer_reason, "Item not as described");
+            assert_eq!(dispute.buyer_evidence_images.len(), 1);
+            assert_eq!(dispute.exchange_count, 0);
+            assert!(dispute.seller_action.is_none());
+            assert!(dispute.seller_response.is_none());
+        }
+
+        #[test]
+        fn test_add_buyer_update() {
+            let mut dispute = create_test_dispute();
+
+            dispute.add_buyer_update(
+                "Additional information".to_string(),
+                vec!["new_evidence.jpg".to_string()],
+            );
+
+            assert_eq!(dispute.buyer_updates.len(), 1);
+            assert_eq!(dispute.buyer_updates[0].message, "Additional information");
+            assert_eq!(dispute.buyer_updates[0].images.len(), 1);
+            assert_eq!(dispute.exchange_count, 1);
+            assert!(dispute.buyer_responded_at.is_some());
+        }
+
+        #[test]
+        fn test_add_seller_update() {
+            let mut dispute = create_test_dispute();
+
+            dispute.add_seller_update(
+                "Seller response".to_string(),
+                vec!["seller_evidence.jpg".to_string()],
+            );
+
+            assert_eq!(dispute.seller_updates.len(), 1);
+            assert_eq!(dispute.seller_updates[0].message, "Seller response");
+            assert_eq!(dispute.exchange_count, 1);
+            assert!(dispute.seller_responded_at.is_some());
+        }
+
+        #[test]
+        fn test_is_max_exchanges_reached() {
+            let mut dispute = create_test_dispute();
+
+            // Not reached yet
+            assert!(!dispute.is_max_exchanges_reached());
+
+            // Simulate 6 exchanges
+            dispute.exchange_count = 6;
+            assert!(dispute.is_max_exchanges_reached());
+
+            // More than max
+            dispute.exchange_count = 10;
+            assert!(dispute.is_max_exchanges_reached());
+        }
+
+        #[test]
+        fn test_set_seller_action_accept() {
+            let mut dispute = create_test_dispute();
+
+            dispute.set_seller_action(SellerAction::Accept);
+
+            assert_eq!(dispute.seller_action, Some(SellerAction::Accept));
+            assert_eq!(dispute.status, DisputeStatus::Resolved);
+            assert!(dispute.seller_responded_at.is_some());
+        }
+
+        #[test]
+        fn test_set_seller_action_reject() {
+            let mut dispute = create_test_dispute();
+
+            dispute.set_seller_action(SellerAction::Reject);
+
+            assert_eq!(dispute.seller_action, Some(SellerAction::Reject));
+            assert_eq!(dispute.status, DisputeStatus::SellerResponded);
+        }
+
+        #[test]
+        fn test_set_seller_action_partial_accept() {
+            let mut dispute = create_test_dispute();
+
+            dispute.set_seller_action(SellerAction::PartialAccept);
+
+            assert_eq!(dispute.seller_action, Some(SellerAction::PartialAccept));
+            assert_eq!(dispute.status, DisputeStatus::SellerResponded);
+        }
+
+        #[test]
+        fn test_escalate() {
+            let mut dispute = create_test_dispute();
+
+            dispute.escalate("buyer123".to_string(), "Seller not responding".to_string());
+
+            assert_eq!(dispute.status, DisputeStatus::Escalated);
+            assert!(dispute.escalated_at.is_some());
+            assert_eq!(dispute.escalated_by, Some("buyer123".to_string()));
+            assert_eq!(
+                dispute.escalate_reason,
+                Some("Seller not responding".to_string())
+            );
+        }
+
+        #[test]
+        fn test_extend_deadline() {
+            let mut dispute = create_test_dispute();
+            let original_deadline = dispute.seller_deadline;
+
+            dispute.extend_deadline(3, "admin123".to_string(), "Need more time".to_string());
+
+            assert_eq!(dispute.status, DisputeStatus::Extended);
+            assert!(dispute.extended_at.is_some());
+            assert_eq!(dispute.extended_by, Some("admin123".to_string()));
+            assert_eq!(dispute.extension_days, Some(3));
+            assert!(
+                dispute.seller_deadline.timestamp_millis() > original_deadline.timestamp_millis()
+            );
+        }
+
+        #[test]
+        fn test_resolve_refunded_full() {
+            let mut dispute = create_test_dispute();
+
+            dispute.resolve_refunded(10000, "admin123".to_string());
+
+            assert_eq!(dispute.status, DisputeStatus::Refunded);
+            assert_eq!(dispute.refund_amount, Some(10000));
+            assert!(dispute.resolved_at.is_some());
+            assert_eq!(dispute.resolved_by, Some("admin123".to_string()));
+            assert_eq!(dispute.resolution, Some("FULL_REFUND".to_string()));
+        }
+
+        #[test]
+        fn test_resolve_refunded_partial() {
+            let mut dispute = create_test_dispute();
+
+            dispute.resolve_refunded(5000, "admin123".to_string()); // 50%
+
+            assert_eq!(dispute.status, DisputeStatus::PartialRefund);
+            assert_eq!(dispute.refund_amount, Some(5000));
+            assert!(dispute
+                .resolution
+                .as_ref()
+                .unwrap()
+                .contains("PARTIAL_REFUND"));
+        }
+
+        #[test]
+        fn test_resolve_rejected() {
+            let mut dispute = create_test_dispute();
+
+            dispute.resolve_rejected("admin123".to_string(), "Buyer claim not valid".to_string());
+
+            assert_eq!(dispute.status, DisputeStatus::Rejected);
+            assert_eq!(
+                dispute.resolution,
+                Some("REJECTED_SELLER_FAVORED".to_string())
+            );
+            assert_eq!(
+                dispute.admin_note,
+                Some("Buyer claim not valid".to_string())
+            );
+        }
+
+        #[test]
+        fn test_should_auto_escalate_seller_conditions() {
+            let mut dispute = create_test_dispute();
+
+            // Not yet - deadline not passed, pending status
+            assert!(!dispute.should_auto_escalate_seller());
+
+            // Set deadline to past
+            dispute.seller_deadline =
+                BsonDateTime::from_millis(BsonDateTime::now().timestamp_millis() - 1000);
+
+            // Now should auto-escalate
+            assert!(dispute.should_auto_escalate_seller());
+
+            // But not if seller already responded
+            dispute.seller_responded_at = Some(BsonDateTime::now());
+            assert!(!dispute.should_auto_escalate_seller());
+        }
+    }
+
+    // ========================================================================
+    // USDT DEPOSIT TESTS
+    // ========================================================================
+
+    mod usdt_deposit_tests {
+        use super::*;
+
+        fn create_test_usdt_deposit() -> UsdtDeposit {
+            UsdtDeposit::new(
+                "USDT-test123".to_string(),
+                "WLT-user123".to_string(),
+                "user123".to_string(),
+                100.0, // 100 USDT
+                UsdtNetwork::Trc20,
+                "TAddr123456".to_string(),
+                "0xabcdef123456".to_string(),
+                12345678,
+                25000.0, // 25,000 VND per USDT
+            )
+        }
+
+        #[test]
+        fn test_new_usdt_deposit() {
+            let deposit = create_test_usdt_deposit();
+
+            assert_eq!(deposit.deposit_id, "USDT-test123");
+            assert_eq!(deposit.wallet_id, "WLT-user123");
+            assert_eq!(deposit.user_id, "user123");
+            assert_eq!(deposit.usdt_amount, 100.0);
+            assert_eq!(deposit.network, UsdtNetwork::Trc20);
+            assert_eq!(deposit.vnd_amount, 2500000); // 100 * 25000
+            assert_eq!(deposit.trust_amount, 2500); // 2500000 / 1000
+            assert_eq!(deposit.exchange_rate, 25000.0);
+            assert_eq!(deposit.status, UsdtDepositStatus::Pending);
+            assert_eq!(deposit.confirmations, 0);
+            assert_eq!(deposit.required_confirmations, 20);
+        }
+
+        #[test]
+        fn test_has_enough_confirmations() {
+            let mut deposit = create_test_usdt_deposit();
+
+            // Not enough
+            deposit.confirmations = 10;
+            assert!(!deposit.has_enough_confirmations());
+
+            // Exactly enough
+            deposit.confirmations = 20;
+            assert!(deposit.has_enough_confirmations());
+
+            // More than enough
+            deposit.confirmations = 30;
+            assert!(deposit.has_enough_confirmations());
+        }
+
+        #[test]
+        fn test_can_credit_confirmed_status() {
+            let mut deposit = create_test_usdt_deposit();
+            deposit.status = UsdtDepositStatus::Confirmed;
+
+            assert!(deposit.can_credit());
+        }
+
+        #[test]
+        fn test_can_credit_confirming_with_enough_confirmations() {
+            let mut deposit = create_test_usdt_deposit();
+            deposit.status = UsdtDepositStatus::Confirming;
+            deposit.confirmations = 25;
+
+            assert!(deposit.can_credit());
+        }
+
+        #[test]
+        fn test_cannot_credit_pending() {
+            let deposit = create_test_usdt_deposit();
+            assert!(!deposit.can_credit());
+        }
+
+        #[test]
+        fn test_cannot_credit_confirming_insufficient() {
+            let mut deposit = create_test_usdt_deposit();
+            deposit.status = UsdtDepositStatus::Confirming;
+            deposit.confirmations = 10;
+
+            assert!(!deposit.can_credit());
+        }
+    }
+
+    // ========================================================================
+    // ADMIN DEBT TESTS
+    // ========================================================================
+
+    mod admin_debt_tests {
+        use super::*;
+
+        fn create_test_admin_debt() -> AdminDebtTransaction {
+            AdminDebtTransaction::new(
+                "DEBT-test123".to_string(),
+                "WLT-user123".to_string(),
+                "user123".to_string(),
+                1000, // original
+                500,  // actual deducted
+                500,  // debt amount
+                "Test debit".to_string(),
+                "admin123".to_string(),
+            )
+        }
+
+        #[test]
+        fn test_new_admin_debt() {
+            let debt = create_test_admin_debt();
+
+            assert_eq!(debt.debt_id, "DEBT-test123");
+            assert_eq!(debt.original_amount, 1000);
+            assert_eq!(debt.actual_deducted, 500);
+            assert_eq!(debt.debt_amount, 500);
+            assert_eq!(debt.remaining_debt, 500);
+            assert_eq!(debt.total_repaid, 0);
+            assert_eq!(debt.status, AdminDebtStatus::Pending);
+            assert!(debt.repayment_history.is_empty());
+        }
+
+        #[test]
+        fn test_add_repayment_partial() {
+            let mut debt = create_test_admin_debt();
+
+            debt.add_repayment(
+                200,
+                DebtRepaymentSource::EscrowRelease,
+                Some("ORD-123".to_string()),
+                None,
+            );
+
+            assert_eq!(debt.total_repaid, 200);
+            assert_eq!(debt.remaining_debt, 300);
+            assert_eq!(debt.status, AdminDebtStatus::Partial);
+            assert_eq!(debt.repayment_history.len(), 1);
+            assert_eq!(debt.repayment_history[0].amount, 200);
+            assert_eq!(
+                debt.repayment_history[0].source,
+                DebtRepaymentSource::EscrowRelease
+            );
+        }
+
+        #[test]
+        fn test_add_repayment_full_clear() {
+            let mut debt = create_test_admin_debt();
+
+            debt.add_repayment(
+                500,
+                DebtRepaymentSource::Deposit,
+                None,
+                Some("DEP-123".to_string()),
+            );
+
+            assert_eq!(debt.total_repaid, 500);
+            assert_eq!(debt.remaining_debt, 0);
+            assert_eq!(debt.status, AdminDebtStatus::Cleared);
+            assert!(debt.cleared_at.is_some());
+        }
+
+        #[test]
+        fn test_multiple_repayments() {
+            let mut debt = create_test_admin_debt();
+
+            debt.add_repayment(100, DebtRepaymentSource::EscrowRelease, None, None);
+            debt.add_repayment(150, DebtRepaymentSource::Deposit, None, None);
+            debt.add_repayment(250, DebtRepaymentSource::ManualRepayment, None, None);
+
+            assert_eq!(debt.total_repaid, 500);
+            assert_eq!(debt.remaining_debt, 0);
+            assert_eq!(debt.status, AdminDebtStatus::Cleared);
+            assert_eq!(debt.repayment_history.len(), 3);
+        }
+    }
+
+    // ========================================================================
+    // DISPUTE LOCK TESTS
+    // ========================================================================
+
+    mod dispute_lock_tests {
+        use super::*;
+
+        #[test]
+        fn test_new_dispute_lock() {
+            let lock = DisputeLock::new(
+                "LOCK-123".to_string(),
+                "WLT-user123".to_string(),
+                "user123".to_string(),
+                5000,
+                "Suspicious activity".to_string(),
+                "CASE-456".to_string(),
+                "admin123".to_string(),
+            );
+
+            assert_eq!(lock.lock_id, "LOCK-123");
+            assert_eq!(lock.amount, 5000);
+            assert_eq!(lock.status, DisputeLockStatus::Active);
+            assert!(lock.resolved_at.is_none());
+            assert!(lock.resolved_by.is_none());
+        }
+
+        #[test]
+        fn test_resolve_dispute_lock() {
+            let mut lock = DisputeLock::new(
+                "LOCK-123".to_string(),
+                "WLT-user123".to_string(),
+                "user123".to_string(),
+                5000,
+                "Suspicious activity".to_string(),
+                "CASE-456".to_string(),
+                "admin123".to_string(),
+            );
+
+            lock.resolve("admin456".to_string(), "Investigation complete".to_string());
+
+            assert_eq!(lock.status, DisputeLockStatus::Resolved);
+            assert!(lock.resolved_at.is_some());
+            assert_eq!(lock.resolved_by, Some("admin456".to_string()));
+            assert_eq!(
+                lock.resolution_note,
+                Some("Investigation complete".to_string())
+            );
+        }
+    }
+
+    // ========================================================================
+    // ENUM TESTS
+    // ========================================================================
+
+    mod enum_tests {
+        use super::*;
+
+        #[test]
+        fn test_wallet_type_equality() {
+            assert_eq!(WalletType::User, WalletType::User);
+            assert_eq!(WalletType::Seller, WalletType::Seller);
+            assert_eq!(WalletType::Platform, WalletType::Platform);
+            assert_ne!(WalletType::User, WalletType::Seller);
+        }
+
+        #[test]
+        fn test_transaction_type_equality() {
+            assert_eq!(
+                TransactionType::DepositManual,
+                TransactionType::DepositManual
+            );
+            assert_ne!(TransactionType::DepositManual, TransactionType::AdminCredit);
+        }
+
+        #[test]
+        fn test_direction_equality() {
+            assert_eq!(Direction::Credit, Direction::Credit);
+            assert_eq!(Direction::Debit, Direction::Debit);
+            assert_ne!(Direction::Credit, Direction::Debit);
+        }
+
+        #[test]
+        fn test_escrow_status_equality() {
+            assert_eq!(EscrowStatus::Holding, EscrowStatus::Holding);
+            assert_eq!(EscrowStatus::Released, EscrowStatus::Released);
+            assert_ne!(EscrowStatus::Holding, EscrowStatus::Released);
+        }
+
+        #[test]
+        fn test_severity_equality() {
+            assert_eq!(Severity::Info, Severity::Info);
+            assert_eq!(Severity::Critical, Severity::Critical);
+            assert_ne!(Severity::Info, Severity::Critical);
+        }
+    }
+}
