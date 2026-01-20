@@ -1,10 +1,10 @@
 # Git Worktree Workflow Skill
 
-> **Trigger**: Use when implementing features that require isolated development environment, parallel development, or following software development standards with feature branches.
+> **Trigger**: Use when implementing features that require isolated development environment, parallel development, or following software development standards with feature branches. Also use when merging feature branches back to master with automated conflict resolution.
 
 ## Overview
 
-Git Worktree enables working on multiple branches simultaneously without switching context. This skill defines the standard workflow for feature development using worktrees.
+Git Worktree enables working on multiple branches simultaneously without switching context. This skill defines the standard workflow for feature development using worktrees, including the complete merge cycle.
 
 ## When to Use Git Worktree
 
@@ -65,45 +65,119 @@ git commit -m "test(permissions): add unit tests for permission validation"
 git commit -m "docs(permissions): add OpenAPI documentation for role endpoints"
 ```
 
-### Phase 4: Push and PR
+### Phase 4: Verification Before Merge
 
 ```bash
-# 6. Push feature branch
-git push -u origin feature/<feature-name>
+# Run full verification suite
+cargo check
+cargo clippy -- -D warnings
+cargo test
+cargo build --release
 
-# 7. Create PR (using gh CLI)
-gh pr create --title "feat: <description>" --body "## Summary
-- <bullet points of changes>
-
-## Testing
-- [ ] Unit tests pass
-- [ ] Integration tests pass
-- [ ] Manual testing completed
-
-## Related
-Closes #<issue-number>"
+# If any step fails, fix and re-run until all pass
 ```
 
-### Phase 5: Cleanup
+### Phase 5: Rebase and Merge to Master
 
 ```bash
-# After PR is merged:
+# 1. Fetch latest from origin
+git fetch origin
 
-# 8. Return to main worktree
+# 2. Rebase onto master (from feature branch worktree)
+git rebase origin/master
+
+# 3. If conflicts occur:
+#    a. Resolve conflicts in conflicting files
+#    b. git add <resolved-files>
+#    c. git rebase --continue
+#    d. Repeat until rebase completes
+
+# 4. Run tests again after rebase
+cargo test
+
+# 5. Switch to main worktree and merge
+cd /Volumes/Data/Git/mmo
+git checkout master
+git merge feature/<feature-name> --no-ff -m "Merge feature/<feature-name> into master"
+
+# Alternative: Fast-forward merge if linear history
+git merge feature/<feature-name> --ff-only
+```
+
+### Phase 6: Push and Cleanup
+
+```bash
+# 1. Push master to origin
+git push origin master
+
+# 2. Return to main worktree (if not already there)
 cd /Volumes/Data/Git/mmo
 
-# 9. Update main branch
-git checkout master && git pull origin master
-
-# 10. Remove worktree
+# 3. Remove worktree
 git worktree remove ../mmo-<feature-name>
 
-# 11. Delete local branch (optional, usually auto-deleted after merge)
+# 4. Delete local branch
 git branch -d feature/<feature-name>
 
-# 12. List remaining worktrees to verify
+# 5. Prune stale references
+git worktree prune
+
+# 6. Verify cleanup
 git worktree list
+git branch -a
 ```
+
+## Automated Merge Workflow (Agent Execution)
+
+When executing this workflow as an agent:
+
+### Pre-merge Checklist
+1. List all worktrees: `git worktree list`
+2. For each worktree with uncommitted changes:
+   - Check diff: `git diff`
+   - Commit all changes with appropriate message
+3. Run tests in each worktree: `cargo test`
+4. Only proceed if tests pass
+
+### Merge Sequence
+For each feature worktree (in order):
+
+```bash
+# 1. In feature worktree, rebase onto master
+cd <worktree-path>
+git fetch origin
+git rebase master
+
+# 2. Resolve any conflicts automatically:
+#    - For Rust imports: prefer alphabetical order
+#    - For Cargo.toml: keep both dependencies
+#    - For code conflicts: analyze both versions and merge logically
+#    - Run cargo fmt after conflict resolution
+
+# 3. After rebase, verify:
+cargo check
+cargo test
+
+# 4. If tests fail after merge:
+#    - Analyze error
+#    - Fix the issue
+#    - Commit fix: git commit -m "fix: resolve merge conflict in <module>"
+#    - Re-run tests
+
+# 5. Return to main worktree and merge
+cd /Volumes/Data/Git/mmo
+git merge <branch-name>
+```
+
+### Conflict Resolution Rules
+
+| File Type | Resolution Strategy |
+|-----------|---------------------|
+| Cargo.toml | Keep both dependencies, merge features |
+| mod.rs | Combine all module declarations |
+| imports | Alphabetical order, remove duplicates |
+| tests | Keep both test functions |
+| domain/dto | Keep both fields, resolve naming conflicts |
 
 ## Worktree Management Commands
 
@@ -135,9 +209,10 @@ When implementing from a plan document (like `docs/plans/*.md`):
 3. **Create todo list** based on plan tasks
 4. **Implement task by task**, committing after each
 5. **Run verification** (cargo check, cargo test, cargo clippy)
-6. **Push and create PR** when all tasks complete
+6. **Rebase and merge** when all tasks complete
+7. **Cleanup worktree** after successful merge
 
-## Example: Implementing Authorization System
+## Example: Complete Feature Lifecycle
 
 ```bash
 # Setup
@@ -145,10 +220,7 @@ git worktree add ../mmo-auth -b feature/authorization-system-v2
 cd ../mmo-auth
 
 # Implement (following plan tasks)
-# Task 1: Add permission constants
-# Task 2: Update role domain model
-# Task 3: Create role management service
-# ... etc
+# ... development work ...
 
 # After each task:
 cargo check
@@ -161,9 +233,20 @@ cargo test
 cargo clippy -- -D warnings
 cargo build --release
 
-# Push and PR
-git push -u origin feature/authorization-system-v2
-gh pr create --title "feat(auth): implement dynamic authorization system v2" --body "..."
+# Rebase onto master
+git fetch origin
+git rebase origin/master
+# ... resolve any conflicts ...
+cargo test  # Verify after rebase
+
+# Merge to master
+cd /Volumes/Data/Git/mmo
+git merge feature/authorization-system-v2
+git push origin master
+
+# Cleanup
+git worktree remove ../mmo-auth
+git branch -d feature/authorization-system-v2
 ```
 
 ## Troubleshooting
@@ -174,6 +257,8 @@ gh pr create --title "feat(auth): implement dynamic authorization system v2" --b
 | Worktree path conflicts | Use unique directory names |
 | Stale worktree references | Run `git worktree prune` |
 | Need to switch worktree branch | Remove and recreate worktree |
+| Rebase conflicts | Resolve file by file, run `git rebase --continue` |
+| Tests fail after merge | Fix failing tests, commit as "fix: resolve merge issues" |
 
 ## Checklist Before Starting Feature
 
@@ -183,11 +268,19 @@ gh pr create --title "feat(auth): implement dynamic authorization system v2" --b
 - [ ] Plan document read and understood
 - [ ] Todo list created for tracking
 
-## Checklist Before PR
+## Checklist Before Merge
 
 - [ ] All tests pass (`cargo test`)
 - [ ] No clippy warnings (`cargo clippy -- -D warnings`)
 - [ ] Code compiles in release mode (`cargo build --release`)
 - [ ] Commits follow message convention
-- [ ] PR description is complete
-- [ ] Related issues are linked
+- [ ] Rebased onto latest master
+- [ ] No uncommitted changes in worktree
+
+## Checklist After Merge
+
+- [ ] Master pushed to origin
+- [ ] Worktree removed
+- [ ] Local feature branch deleted
+- [ ] `git worktree prune` executed
+- [ ] `git worktree list` shows only main worktree
