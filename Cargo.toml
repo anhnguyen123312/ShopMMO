@@ -83,6 +83,14 @@ path = "scripts/create_super_admin.rs"
 name = "seed_roles"
 path = "scripts/seed_roles.rs"
 
+[[bin]]
+name = "generate_openapi"
+path = "src/bin/generate_openapi.rs"
+
+[[bin]]
+name = "swagger_server"
+path = "src/bin/swagger_server.rs"
+
 [dev-dependencies]
 # Testing
 mockall = "0.13"

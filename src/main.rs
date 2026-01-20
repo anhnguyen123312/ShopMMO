@@ -27,7 +27,7 @@ mod database;
 mod middleware;
 mod modules;
 mod utils;
-mod openapi;
+pub mod openapi;
 
 use config::AppConfig;
 use database::{MongoDB, RedisDB};

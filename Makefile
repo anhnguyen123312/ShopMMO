@@ -1,6 +1,6 @@
 # MMO API - Development Makefile
 
-.PHONY: help run build test fmt lint clean docker-build docker-run setup
+.PHONY: help run build test fmt lint clean docker-build docker-run setup swagger swagger-gen
 
 # Default target
 help:
@@ -25,6 +25,10 @@ help:
 	@echo "  make redis-stop   - Stop Redis"
 	@echo "  make db-start     - Start MongoDB + Redis"
 	@echo "  make db-stop      - Stop MongoDB + Redis"
+	@echo ""
+	@echo "Swagger/OpenAPI:"
+	@echo "  make swagger      - Start Swagger UI server (port 8081)"
+	@echo "  make swagger-gen  - Generate OpenAPI JSON to swagger/openapi.json"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  make clean        - Remove build artifacts"
@@ -114,6 +118,16 @@ setup:
 logs:
 	@echo "📋 Recent logs:"
 	@tail -f /tmp/mmo-api.log 2>/dev/null || echo "No log file found. Run the server with: RUST_LOG=debug cargo run > /tmp/mmo-api.log"
+
+# Swagger/OpenAPI
+swagger:
+	@echo "📚 Starting Swagger UI server..."
+	cargo run --bin swagger_server
+
+swagger-gen:
+	@echo "📝 Generating OpenAPI specification..."
+	cargo run --bin generate_openapi
+	@echo "✅ OpenAPI spec: swagger/openapi.json"
 
 # Docker
 docker-build:

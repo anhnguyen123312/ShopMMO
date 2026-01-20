@@ -3,8 +3,8 @@
 //! Request and response structures for category endpoints.
 
 use serde::{Deserialize, Serialize};
-use validator::Validate;
 use utoipa::ToSchema;
+use validator::Validate;
 
 use super::domain::CategoryStatus;
 
@@ -38,7 +38,10 @@ pub struct CreateCategoryRequest {
 
     /// Category description
     #[validate(length(max = 500, message = "Description too long"))]
-    #[schema(example = "Streaming services like Netflix, Spotify, Disney+", max_length = 500)]
+    #[schema(
+        example = "Streaming services like Netflix, Spotify, Disney+",
+        max_length = 500
+    )]
     pub description: Option<String>,
 
     /// Display order
@@ -160,9 +163,8 @@ pub struct CategoryTreeResponse {
     /// Product count in this category
     pub product_count: i32,
 
-    /// Child categories (references parent to avoid infinite recursion in schema)
     #[serde(default)]
-    #[schema(inline)]
+    #[schema(no_recursion)]
     pub children: Vec<CategoryTreeResponse>,
 }
 
