@@ -129,19 +129,38 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::from(Arc::new(config.clone())))
             // Health check endpoint
             .route("/health", web::get().to(health_check))
-            // API routes
+            // Public auth routes (explicit paths, no scope - registered before protected /api scope)
+            .route("/api/auth/register", web::post().to(modules::auth::handler::register))
+            .route("/api/auth/login", web::post().to(modules::auth::handler::login))
+            .route("/api/auth/refresh", web::post().to(modules::auth::handler::refresh_token))
+            // Public category routes
+            .route("/api/categories/tree", web::get().to(modules::category::handler::list_categories_tree))
+            .route("/api/categories/{id}", web::get().to(modules::category::handler::get_category))
+            // Protected API routes
             .service(
                 web::scope("/api")
-                    // Public routes
-                    .configure(modules::auth::routes::configure)
-                    .configure(modules::category::routes::configure)
-                    // Protected routes (require authentication)
+                    .wrap(middleware::AuthMiddleware::new(config.clone()))
                     .service(
-                        web::scope("")
-                            .wrap(middleware::AuthMiddleware::new(config.clone()))
-                            .configure(modules::wallet::routes::configure)
-                            .configure(modules::permissions::routes::configure),
-                    ),
+                        web::scope("/auth")
+                            .route("/logout", web::post().to(modules::auth::handler::logout))
+                            .route("/me", web::get().to(modules::auth::handler::get_me))
+                            .route("/change-password", web::post().to(modules::auth::handler::change_password))
+                            .service(
+                                web::scope("/admin")
+                                    .route("/assign-roles", web::post().to(modules::auth::handler::assign_roles))
+                                    .route("/users/{user_id}/roles", web::get().to(modules::auth::handler::get_user_roles)),
+                            ),
+                    )
+                    .service(
+                        web::scope("/admin/categories")
+                            .route("", web::post().to(modules::category::handler::create_category))
+                            .route("/reorder", web::post().to(modules::category::handler::reorder_categories))
+                            .route("/{id}", web::put().to(modules::category::handler::update_category))
+                            .route("/{id}", web::delete().to(modules::category::handler::delete_category)),
+                    )
+                    .configure(modules::wallet::routes::configure_user)
+                    .configure(modules::wallet::routes::configure_admin)
+                    .configure(modules::permissions::routes::configure),
             )
             // Swagger UI
             // .service(

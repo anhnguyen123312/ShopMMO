@@ -3,26 +3,26 @@
 //! Request and response structures for authentication endpoints.
 
 use serde::{Deserialize, Serialize};
-use validator::Validate;
 use utoipa::ToSchema;
+use validator::Validate;
 
 /// Register request
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterRequest {
-    /// User's unique username
+    /// User's unique username (3-30 characters, alphanumeric and underscore)
     #[validate(length(min = 3, max = 30, message = "Username must be 3-30 characters"))]
     #[schema(example = "johndoe123", min_length = 3, max_length = 30)]
     pub username: String,
 
-    /// User's email
+    /// User's email address
     #[validate(email(message = "Invalid email format"))]
-    #[schema(example = "user@example.com")]
+    #[schema(example = "john.doe@example.com")]
     pub email: String,
 
-    /// User's password
+    /// User's password (minimum 8 characters)
     #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
-    #[schema(example = "password123", min_length = 8)]
+    #[schema(example = "SecurePass123!", min_length = 8)]
     pub password: String,
 
     /// User's display name
@@ -31,27 +31,30 @@ pub struct RegisterRequest {
     pub name: String,
 }
 
-/// Login request
+/// Login request - authenticate with username/email and password
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
-    /// User's username or email
+    /// User's username or email address
     #[validate(length(min = 1, message = "Username or email is required"))]
     #[schema(example = "johndoe123")]
     pub identifier: String,
 
     /// User's password
     #[validate(length(min = 1, message = "Password is required"))]
-    #[schema(example = "password123")]
+    #[schema(example = "SecurePass123!")]
     pub password: String,
 }
 
-/// Refresh token request
+/// Refresh token request - exchange refresh token for new access token
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RefreshTokenRequest {
-    /// Refresh token
+    /// Valid refresh token (JWT)
     #[validate(length(min = 1, message = "Refresh token is required"))]
+    #[schema(
+        example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NWY4YTFiMmMzZDRlNWY2YTdiOGM5ZDAiLCJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTcxMTIzNDU2N30.abc123"
+    )]
     pub refresh_token: String,
 }
 
@@ -59,10 +62,16 @@ pub struct RefreshTokenRequest {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthResponse {
-    /// Access token (JWT)
+    /// Access token (JWT) - use in Authorization header
+    #[schema(
+        example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NWY4YTFiMmMzZDRlNWY2YTdiOGM5ZDAiLCJ1c2VybmFtZSI6ImpvaG5kb2UxMjMiLCJyb2xlIjoiQlVZRVIiLCJleHAiOjE3MTEyMzQ1Njd9.xyz789"
+    )]
     pub access_token: String,
 
-    /// Refresh token (JWT)
+    /// Refresh token (JWT) - use to get new access token
+    #[schema(
+        example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NWY4YTFiMmMzZDRlNWY2YTdiOGM5ZDAiLCJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTcxMTgzOTM2N30.def456"
+    )]
     pub refresh_token: String,
 
     /// Token type (always "Bearer")
@@ -98,8 +107,8 @@ impl AuthResponse {
 #[derive(Debug, Serialize, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserResponse {
-    /// User ID
-    #[schema(example = "60f1b5b5b5b5b5b5b5b5b5b5")]
+    /// User ID (MongoDB ObjectId)
+    #[schema(example = "65f8a1b2c3d4e5f6a7b8c9d0")]
     pub id: String,
 
     /// User's username
@@ -107,21 +116,23 @@ pub struct UserResponse {
     pub username: String,
 
     /// User's email
-    #[schema(example = "user@example.com")]
+    #[schema(example = "john.doe@example.com")]
     pub email: String,
 
     /// User's display name
     #[schema(example = "John Doe")]
     pub name: String,
 
-    /// User's role
-    #[schema(example = "user")]
+    /// User's primary role
+    #[schema(example = "BUYER")]
     pub role: String,
 
     /// Email verification status
+    #[schema(example = true)]
     pub email_verified: bool,
 
-    /// Account creation timestamp
+    /// Account creation timestamp (ISO 8601)
+    #[schema(example = "2024-01-15T10:30:00Z")]
     pub created_at: String,
 }
 
@@ -145,11 +156,12 @@ impl From<crate::modules::auth::domain::User> for UserResponse {
 pub struct ChangePasswordRequest {
     /// Current password
     #[validate(length(min = 1, message = "Current password is required"))]
+    #[schema(example = "OldPass123!")]
     pub current_password: String,
 
     /// New password
     #[validate(length(min = 8, message = "New password must be at least 8 characters"))]
-    #[schema(min_length = 8)]
+    #[schema(example = "NewSecurePass456!", min_length = 8)]
     pub new_password: String,
 }
 
@@ -159,6 +171,9 @@ pub struct ChangePasswordRequest {
 pub struct LogoutRequest {
     /// Refresh token to revoke
     #[validate(length(min = 1, message = "Refresh token is required"))]
+    #[schema(
+        example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NWY4YTFiMmMzZDRlNWY2YTdiOGM5ZDAiLCJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTcxMTgzOTM2N30.def456"
+    )]
     pub refresh_token: String,
 }
 
@@ -168,10 +183,12 @@ pub struct LogoutRequest {
 pub struct AssignRoleRequest {
     /// User ID to assign role to
     #[validate(length(min = 1, message = "User ID is required"))]
+    #[schema(example = "65f8a1b2c3d4e5f6a7b8c9d0")]
     pub user_id: String,
 
     /// Roles to assign (e.g., ["BUYER", "SELLER"])
     #[validate(length(min = 1, message = "At least one role is required"))]
+    #[schema(example = json!(["BUYER", "SELLER"]))]
     pub roles: Vec<String>,
 }
 
@@ -180,26 +197,34 @@ pub struct AssignRoleRequest {
 #[serde(rename_all = "camelCase")]
 pub struct UserRolesResponse {
     /// User ID
+    #[schema(example = "65f8a1b2c3d4e5f6a7b8c9d0")]
     pub id: String,
 
     /// User's username
+    #[schema(example = "johndoe123")]
     pub username: String,
 
     /// User's email
+    #[schema(example = "john.doe@example.com")]
     pub email: String,
 
     /// User's display name
+    #[schema(example = "John Doe")]
     pub name: String,
 
     /// Primary role (backward compatibility)
+    #[schema(example = "SELLER")]
     pub role: String,
 
     /// All assigned roles
+    #[schema(example = json!(["BUYER", "SELLER"]))]
     pub roles: Vec<String>,
 
     /// Permission version
+    #[schema(example = 1)]
     pub perm_version: u32,
 
     /// Account status
+    #[schema(example = "Active")]
     pub status: String,
 }

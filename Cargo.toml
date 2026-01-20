@@ -84,6 +84,10 @@ name = "seed_roles"
 path = "scripts/seed_roles.rs"
 
 [[bin]]
+name = "seed_test_data"
+path = "scripts/seed_test_data.rs"
+
+[[bin]]
 name = "generate_openapi"
 path = "src/bin/generate_openapi.rs"
 
