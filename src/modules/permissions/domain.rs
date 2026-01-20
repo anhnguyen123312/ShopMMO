@@ -100,12 +100,7 @@ pub struct Role {
 
 impl Role {
     /// Create a new role
-    pub fn new(
-        name: String,
-        display_name: String,
-        level: i32,
-        permissions: Vec<String>,
-    ) -> Self {
+    pub fn new(name: String, display_name: String, level: i32, permissions: Vec<String>) -> Self {
         let now = DateTime::now();
         Self {
             id: None,
@@ -222,6 +217,8 @@ mod tests {
             is_system: true,
             is_active: true,
             version: 1,
+            created_at: Some(DateTime::now()),
+            updated_at: Some(DateTime::now()),
         };
 
         assert_eq!(role.level, 1);
@@ -252,15 +249,14 @@ mod tests {
             user_id: "user123".to_string(),
             roles: vec!["buyer".to_string(), "seller".to_string()],
             direct_permissions: vec![],
-            effective_permissions: vec![
-                "products:read".to_string(),
-                "products:create".to_string(),
-            ],
+            effective_permissions: vec!["products:read".to_string(), "products:create".to_string()],
             perm_version: 5,
         };
 
         assert_eq!(perms.roles.len(), 2);
         assert_eq!(perms.perm_version, 5);
-        assert!(perms.effective_permissions.contains(&"products:create".to_string()));
+        assert!(perms
+            .effective_permissions
+            .contains(&"products:create".to_string()));
     }
 }
