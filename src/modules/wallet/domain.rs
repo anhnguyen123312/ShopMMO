@@ -62,6 +62,23 @@ pub struct Wallet {
     #[serde(default)]
     pub commission_debt: i64,
 
+    // === Admin Debt System (V2) ===
+    /// Admin-imposed debt (auto-repaid from escrow releases and deposits)
+    #[serde(default)]
+    pub admin_debt: i64,
+
+    /// Reason for admin debt
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub admin_debt_reason: Option<String>,
+
+    /// Admin who created the debt
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub admin_debt_created_by: Option<String>,
+
+    /// When admin debt was created
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub admin_debt_created_at: Option<BsonDateTime>,
+
     // === Monthly Snapshot Reference ===
     /// Last snapshot month: "2026-01"
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -730,11 +747,210 @@ pub enum DepositStatus {
 }
 
 // ============================================================================
+// DISPUTE LOCK MODEL
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DisputeLock {
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    pub id: Option<ObjectId>,
+
+    pub lock_id: String,
+    pub wallet_id: String,
+    pub user_id: String,
+
+    pub amount: i64,
+    pub reason: String,
+    pub case_reference: String,
+
+    pub admin_id: String,
+
+    pub status: DisputeLockStatus,
+
+    pub created_at: BsonDateTime,
+    pub updated_at: BsonDateTime,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolved_at: Option<BsonDateTime>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolved_by: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolution_note: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum DisputeLockStatus {
+    Active,
+    Resolved,
+    Released,
+}
+
+impl DisputeLock {
+    pub fn new(
+        lock_id: String,
+        wallet_id: String,
+        user_id: String,
+        amount: i64,
+        reason: String,
+        case_reference: String,
+        admin_id: String,
+    ) -> Self {
+        let now = BsonDateTime::now();
+        Self {
+            id: None,
+            lock_id,
+            wallet_id,
+            user_id,
+            amount,
+            reason,
+            case_reference,
+            admin_id,
+            status: DisputeLockStatus::Active,
+            created_at: now,
+            updated_at: now,
+            resolved_at: None,
+            resolved_by: None,
+            resolution_note: None,
+        }
+    }
+
+    pub fn resolve(&mut self, resolved_by: String, note: String) {
+        self.status = DisputeLockStatus::Resolved;
+        self.resolved_at = Some(BsonDateTime::now());
+        self.resolved_by = Some(resolved_by);
+        self.resolution_note = Some(note);
+        self.updated_at = BsonDateTime::now();
+    }
+}
+
+// ============================================================================
+// ADMIN DEBT TRANSACTION MODEL
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminDebtTransaction {
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    pub id: Option<ObjectId>,
+
+    pub debt_id: String,
+    pub wallet_id: String,
+    pub user_id: String,
+
+    pub original_amount: i64,
+    pub actual_deducted: i64,
+    pub debt_amount: i64,
+
+    pub reason: String,
+    pub admin_id: String,
+
+    pub total_repaid: i64,
+    pub remaining_debt: i64,
+
+    #[serde(default)]
+    pub repayment_history: Vec<DebtRepayment>,
+
+    pub status: AdminDebtStatus,
+
+    pub created_at: BsonDateTime,
+    pub updated_at: BsonDateTime,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleared_at: Option<BsonDateTime>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DebtRepayment {
+    pub order_id: Option<String>,
+    pub deposit_id: Option<String>,
+    pub amount: i64,
+    pub source: DebtRepaymentSource,
+    pub repaid_at: BsonDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum DebtRepaymentSource {
+    EscrowRelease,
+    Deposit,
+    ManualRepayment,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AdminDebtStatus {
+    Pending,
+    Partial,
+    Cleared,
+}
+
+impl AdminDebtTransaction {
+    pub fn new(
+        debt_id: String,
+        wallet_id: String,
+        user_id: String,
+        original_amount: i64,
+        actual_deducted: i64,
+        debt_amount: i64,
+        reason: String,
+        admin_id: String,
+    ) -> Self {
+        let now = BsonDateTime::now();
+        Self {
+            id: None,
+            debt_id,
+            wallet_id,
+            user_id,
+            original_amount,
+            actual_deducted,
+            debt_amount,
+            reason,
+            admin_id,
+            total_repaid: 0,
+            remaining_debt: debt_amount,
+            repayment_history: vec![],
+            status: AdminDebtStatus::Pending,
+            created_at: now,
+            updated_at: now,
+            cleared_at: None,
+        }
+    }
+
+    pub fn add_repayment(
+        &mut self,
+        amount: i64,
+        source: DebtRepaymentSource,
+        order_id: Option<String>,
+        deposit_id: Option<String>,
+    ) {
+        let repayment = DebtRepayment {
+            order_id,
+            deposit_id,
+            amount,
+            source,
+            repaid_at: BsonDateTime::now(),
+        };
+        self.repayment_history.push(repayment);
+        self.total_repaid += amount;
+        self.remaining_debt -= amount;
+        self.updated_at = BsonDateTime::now();
+
+        if self.remaining_debt <= 0 {
+            self.status = AdminDebtStatus::Cleared;
+            self.cleared_at = Some(BsonDateTime::now());
+        } else {
+            self.status = AdminDebtStatus::Partial;
+        }
+    }
+}
+
+// ============================================================================
 // HELPER IMPLEMENTATIONS
 // ============================================================================
 
 impl Wallet {
-    /// Create new user wallet
     pub fn new_user(user_id: String, wallet_id: String) -> Self {
         let now = BsonDateTime::now();
         Self {
@@ -752,6 +968,10 @@ impl Wallet {
             lifetime_received: 0,
             commission_rate: None,
             commission_debt: 0,
+            admin_debt: 0,
+            admin_debt_reason: None,
+            admin_debt_created_by: None,
+            admin_debt_created_at: None,
             last_snapshot_month: None,
             last_snapshot_balance: None,
             last_snapshot_verified: false,
@@ -787,9 +1007,16 @@ impl Wallet {
         self.status == WalletStatus::Active
     }
 
-    /// Check if wallet can withdraw
     pub fn can_withdraw(&self, amount: i64) -> bool {
-        self.is_active() && self.available_trust >= amount
+        self.is_active() && self.available_trust >= amount && self.admin_debt == 0
+    }
+
+    pub fn has_admin_debt(&self) -> bool {
+        self.admin_debt > 0
+    }
+
+    pub fn total_debt(&self) -> i64 {
+        self.commission_debt + self.admin_debt
     }
 }
 
@@ -837,7 +1064,12 @@ impl Transaction {
     }
 
     /// Add status change to history
-    pub fn add_status_change(&mut self, to_status: TransactionStatus, changed_by: String, reason: Option<String>) {
+    pub fn add_status_change(
+        &mut self,
+        to_status: TransactionStatus,
+        changed_by: String,
+        reason: Option<String>,
+    ) {
         let change = StatusChange {
             from_status: self.status.clone(),
             to_status: to_status.clone(),
@@ -1359,10 +1591,8 @@ impl DisputeCase {
     pub fn can_auto_resolve(&self) -> bool {
         if let Some(_deadline) = self.buyer_deadline {
             if let Some(action) = &self.seller_action {
-                return matches!(
-                    action,
-                    SellerAction::Accept | SellerAction::PartialAccept
-                ) && self.is_buyer_deadline_passed();
+                return matches!(action, SellerAction::Accept | SellerAction::PartialAccept)
+                    && self.is_buyer_deadline_passed();
             }
         }
         false
@@ -1426,7 +1656,7 @@ impl DisputeCase {
         };
 
         let new_deadline = BsonDateTime::from_millis(
-            current_deadline.timestamp_millis() + (days as i64 * 24 * 60 * 60 * 1000)
+            current_deadline.timestamp_millis() + (days as i64 * 24 * 60 * 60 * 1000),
         );
 
         self.extended_at = Some(now);
@@ -1462,7 +1692,10 @@ impl DisputeCase {
         self.resolution = Some(if refund_amount == self.amount {
             "FULL_REFUND".to_string()
         } else {
-            format!("PARTIAL_REFUND_{}%", (refund_amount as f64 / self.amount as f64 * 100.0) as i32)
+            format!(
+                "PARTIAL_REFUND_{}%",
+                (refund_amount as f64 / self.amount as f64 * 100.0) as i32
+            )
         });
         self.updated_at = now;
     }

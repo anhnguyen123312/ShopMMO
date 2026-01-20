@@ -31,7 +31,6 @@ impl WalletService {
     // WALLET MANAGEMENT
     // ========================================================================
 
-    /// Get wallet balance
     pub async fn get_wallet_balance(
         &self,
         wallet_id: &str,
@@ -48,6 +47,12 @@ impl WalletService {
             None
         };
 
+        let admin_debt = if wallet.admin_debt > 0 {
+            Some(wallet.admin_debt)
+        } else {
+            None
+        };
+
         Ok(WalletBalanceResponse {
             wallet_id: wallet.wallet_id,
             wallet_type: wallet.wallet_type,
@@ -59,6 +64,7 @@ impl WalletService {
             total_vnd: wallet.total_trust * VND_TO_TRUST_RATE,
             commission_debt,
             commission_rate: wallet.commission_rate,
+            admin_debt,
             status: wallet.status,
         })
     }
@@ -105,6 +111,12 @@ impl WalletService {
             None
         };
 
+        let admin_debt = if wallet.admin_debt > 0 {
+            Some(wallet.admin_debt)
+        } else {
+            None
+        };
+
         Ok(WalletInfoResponse {
             wallet_id: wallet.wallet_id,
             user_id: wallet.user_id,
@@ -119,6 +131,8 @@ impl WalletService {
             lifetime_received: wallet.lifetime_received,
             commission_debt,
             commission_rate: wallet.commission_rate,
+            admin_debt,
+            admin_debt_reason: wallet.admin_debt_reason,
             last_snapshot_month: wallet.last_snapshot_month,
             last_snapshot_balance: wallet.last_snapshot_balance,
             status: wallet.status,

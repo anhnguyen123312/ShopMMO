@@ -11,6 +11,13 @@ use chrono::Timelike;
 use crate::core::error::ServiceError;
 use super::{dto::*, service::WalletService};
 
+struct ReconciliationCheckResult {
+    passed: bool,
+    expected: i64,
+    actual: i64,
+    details: String,
+}
+
 /// Duration for escrow auto-release check (every 5 minutes)
 const ESCROW_CHECK_INTERVAL: Duration = Duration::from_secs(300);
 
@@ -162,83 +169,89 @@ impl WalletCronManager {
     }
 }
 
-/// Extension trait for WalletService to add reconciliation methods
 impl WalletService {
-    /// Perform daily reconciliation of all wallets
-    ///
-    /// This checks:
-    /// - Balance invariants
-    /// - Transaction count matches
-    /// - Escrow totals
-    /// - Platform wallet balance
     pub async fn daily_reconciliation(
         &self,
     ) -> Result<ReconciliationResponse, ServiceError> {
         let start = std::time::Instant::now();
-
-        // Get all wallets
-        // Note: This would need pagination for production
-        let wallets = self.repo.find_all_wallets_for_reconciliation(100, 0).await?;
-
         let mut discrepancies = vec![];
         let mut discrepancy_count = 0;
 
+        let check1 = self.check_system_total_trust().await?;
+        if !check1.passed {
+            discrepancy_count += 1;
+            discrepancies.push(ReconciliationDiscrepancy {
+                wallet_id: "SYSTEM".to_string(),
+                discrepancy_type: "SYSTEM_TOTAL_MISMATCH".to_string(),
+                expected: check1.expected,
+                actual: check1.actual,
+                details: check1.details,
+            });
+        }
+
+        let check2 = self.check_platform_wallet_balance().await?;
+        if !check2.passed {
+            discrepancy_count += 1;
+            discrepancies.push(ReconciliationDiscrepancy {
+                wallet_id: "PLATFORM".to_string(),
+                discrepancy_type: "PLATFORM_WALLET_MISMATCH".to_string(),
+                expected: check2.expected,
+                actual: check2.actual,
+                details: check2.details,
+            });
+        }
+
+        let check3 = self.check_vnd_trust_conversion().await?;
+        if !check3.passed {
+            discrepancy_count += 1;
+            discrepancies.push(ReconciliationDiscrepancy {
+                wallet_id: "CONVERSION".to_string(),
+                discrepancy_type: "VND_TRUST_MISMATCH".to_string(),
+                expected: check3.expected,
+                actual: check3.actual,
+                details: check3.details,
+            });
+        }
+
+        let check4 = self.check_withdrawal_vnd().await?;
+        if !check4.passed {
+            discrepancy_count += 1;
+            discrepancies.push(ReconciliationDiscrepancy {
+                wallet_id: "WITHDRAWALS".to_string(),
+                discrepancy_type: "WITHDRAWAL_VND_MISMATCH".to_string(),
+                expected: check4.expected,
+                actual: check4.actual,
+                details: check4.details,
+            });
+        }
+
+        let check5 = self.check_money_flow_balance().await?;
+        if !check5.passed {
+            discrepancy_count += 1;
+            discrepancies.push(ReconciliationDiscrepancy {
+                wallet_id: "FLOW".to_string(),
+                discrepancy_type: "MONEY_FLOW_MISMATCH".to_string(),
+                expected: check5.expected,
+                actual: check5.actual,
+                details: check5.details,
+            });
+        }
+
+        let wallets = self.repo.find_all_wallets_for_reconciliation(1000, 0).await?;
         for wallet in &wallets {
-            // Check balance invariant
             if !wallet.validate_balance_invariant() {
                 discrepancy_count += 1;
                 discrepancies.push(ReconciliationDiscrepancy {
                     wallet_id: wallet.wallet_id.clone(),
-                    discrepancy_type: "BALANCE_MISMATCH".to_string(),
+                    discrepancy_type: "BALANCE_INVARIANT".to_string(),
                     expected: wallet.available_trust + wallet.withdrawal_locked + wallet.dispute_locked,
                     actual: wallet.total_trust,
                     details: format!(
-                        "Balance invariant violated: available={}, locked={}, dispute={}, total={}",
+                        "available={}, locked={}, dispute={}, total={}",
                         wallet.available_trust, wallet.withdrawal_locked, wallet.dispute_locked, wallet.total_trust
                     ),
                 });
             }
-
-            // Verify transaction count matches (simplified)
-            let tx_count = self
-                .repo
-                .count_transactions_by_wallet(&wallet.wallet_id)
-                .await?;
-
-            // This is a simplified check - in production you'd verify more
-            if tx_count > 0 && wallet.lifetime_deposited == 0 && wallet.lifetime_received == 0 {
-                // Has transactions but no recorded deposits/received - suspicious
-                discrepancy_count += 1;
-                discrepancies.push(ReconciliationDiscrepancy {
-                    wallet_id: wallet.wallet_id.clone(),
-                    discrepancy_type: "TRANSACTION_MISMATCH".to_string(),
-                    expected: 0,
-                    actual: tx_count,
-                    details: format!("Wallet has {} transactions but no recorded deposits/received", tx_count),
-                });
-            }
-        }
-
-        // Verify platform wallet
-        let platform_wallet = self.repo.find_platform_wallet().await?;
-        let escrow_total = self.repo.sum_active_escrows().await?;
-
-        // Platform wallet should roughly equal sum of all escrows
-        // (This is simplified - in production you'd track more carefully)
-        let platform_escrow_match = (platform_wallet.available_trust - escrow_total).abs() < 1000; // Allow 1000 Trust variance
-
-        if !platform_escrow_match {
-            discrepancy_count += 1;
-            discrepancies.push(ReconciliationDiscrepancy {
-                wallet_id: platform_wallet.wallet_id,
-                discrepancy_type: "PLATFORM_ESCROW_MISMATCH".to_string(),
-                expected: escrow_total,
-                actual: platform_wallet.available_trust,
-                details: format!(
-                    "Platform wallet ({}) doesn't match active escrows total ({})",
-                    platform_wallet.available_trust, escrow_total
-                ),
-            });
         }
 
         let duration = start.elapsed();
@@ -255,6 +268,99 @@ impl WalletService {
                 "DISCREPANCIES_FOUND".to_string()
             },
             performed_at: chrono::Utc::now().to_rfc3339(),
+        })
+    }
+
+    async fn check_system_total_trust(&self) -> Result<ReconciliationCheckResult, ServiceError> {
+        let total_all_wallets = self.repo.sum_all_wallet_balances().await.unwrap_or(0);
+        let total_deposits = self.repo.sum_all_deposits().await.unwrap_or(0);
+        let total_withdrawals = self.repo.sum_all_withdrawals().await.unwrap_or(0);
+        
+        let expected = total_deposits - total_withdrawals;
+        let passed = (total_all_wallets - expected).abs() < 100;
+
+        Ok(ReconciliationCheckResult {
+            passed,
+            expected,
+            actual: total_all_wallets,
+            details: format!(
+                "Deposits: {}, Withdrawals: {}, Expected balance: {}, Actual: {}",
+                total_deposits, total_withdrawals, expected, total_all_wallets
+            ),
+        })
+    }
+
+    async fn check_platform_wallet_balance(&self) -> Result<ReconciliationCheckResult, ServiceError> {
+        let platform_wallet = self.repo.find_platform_wallet().await?;
+        let escrow_total = self.repo.sum_active_escrows().await.unwrap_or(0);
+        
+        let expected = escrow_total;
+        let passed = (platform_wallet.available_trust - expected).abs() < 1000;
+
+        Ok(ReconciliationCheckResult {
+            passed,
+            expected,
+            actual: platform_wallet.available_trust,
+            details: format!(
+                "Platform balance: {}, Active escrows: {}",
+                platform_wallet.available_trust, escrow_total
+            ),
+        })
+    }
+
+    async fn check_vnd_trust_conversion(&self) -> Result<ReconciliationCheckResult, ServiceError> {
+        let total_vnd_deposits = self.repo.sum_vnd_deposits().await.unwrap_or(0);
+        let total_trust_deposits = self.repo.sum_all_deposits().await.unwrap_or(0);
+        
+        let expected_trust = total_vnd_deposits / 1000;
+        let passed = (total_trust_deposits - expected_trust).abs() < 100;
+
+        Ok(ReconciliationCheckResult {
+            passed,
+            expected: expected_trust,
+            actual: total_trust_deposits,
+            details: format!(
+                "VND deposited: {}, Expected Trust: {}, Actual Trust: {}",
+                total_vnd_deposits, expected_trust, total_trust_deposits
+            ),
+        })
+    }
+
+    async fn check_withdrawal_vnd(&self) -> Result<ReconciliationCheckResult, ServiceError> {
+        let total_withdrawal_trust = self.repo.sum_all_withdrawals().await.unwrap_or(0);
+        let total_commission = self.repo.sum_all_commission().await.unwrap_or(0);
+        let total_withdrawal_vnd = self.repo.sum_withdrawal_vnd().await.unwrap_or(0);
+        
+        let expected_vnd = (total_withdrawal_trust - total_commission) * 1000;
+        let passed = (total_withdrawal_vnd - expected_vnd).abs() < 100_000;
+
+        Ok(ReconciliationCheckResult {
+            passed,
+            expected: expected_vnd,
+            actual: total_withdrawal_vnd,
+            details: format!(
+                "Withdrawal Trust: {}, Commission: {}, Expected VND: {}, Actual VND: {}",
+                total_withdrawal_trust, total_commission, expected_vnd, total_withdrawal_vnd
+            ),
+        })
+    }
+
+    async fn check_money_flow_balance(&self) -> Result<ReconciliationCheckResult, ServiceError> {
+        let inflow = self.repo.sum_all_deposits().await.unwrap_or(0);
+        let outflow = self.repo.sum_all_withdrawals().await.unwrap_or(0);
+        let remaining = inflow - outflow;
+        
+        let total_all_wallets = self.repo.sum_all_wallet_balances().await.unwrap_or(0);
+        let passed = (remaining - total_all_wallets).abs() < 100;
+
+        Ok(ReconciliationCheckResult {
+            passed,
+            expected: remaining,
+            actual: total_all_wallets,
+            details: format!(
+                "Inflow: {}, Outflow: {}, Expected remaining: {}, Actual wallets: {}",
+                inflow, outflow, remaining, total_all_wallets
+            ),
         })
     }
 

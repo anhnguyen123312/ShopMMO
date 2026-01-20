@@ -4,13 +4,12 @@
 //! Based on TaphoaMMO Trust Wallet V3 Design
 
 use serde::{Deserialize, Serialize};
-use validator::Validate;
 use utoipa::ToSchema;
+use validator::Validate;
 
 use super::domain::{
-    BalanceType, Direction, EscrowStatus, Severity, SnapshotStatus,
-    TransactionStatus, TransactionType, ValidationResult, WalletStatus, WalletType,
-    WithdrawalStatus,
+    BalanceType, Direction, EscrowStatus, Severity, SnapshotStatus, TransactionStatus,
+    TransactionType, ValidationResult, WalletStatus, WalletType, WithdrawalStatus,
 };
 
 // ============================================================================
@@ -34,12 +33,14 @@ pub struct WalletBalanceResponse {
     pub available_vnd: i64,
     pub total_vnd: i64,
 
-    // Seller-specific
     #[serde(skip_serializing_if = "Option::is_none")]
     pub commission_debt: Option<i64>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub commission_rate: Option<f64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub admin_debt: Option<i64>,
 
     pub status: WalletStatus,
 }
@@ -64,12 +65,17 @@ pub struct WalletInfoResponse {
     pub lifetime_spent: i64,
     pub lifetime_received: i64,
 
-    // Seller-specific
     #[serde(skip_serializing_if = "Option::is_none")]
     pub commission_debt: Option<i64>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub commission_rate: Option<f64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub admin_debt: Option<i64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub admin_debt_reason: Option<String>,
 
     // Snapshot info
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -96,7 +102,11 @@ pub struct WalletInfoResponse {
 #[serde(rename_all = "camelCase")]
 pub struct AutoDepositRequest {
     /// VND amount (must be divisible by 1000)
-    #[validate(range(min = 10000, max = 50000000, message = "Amount must be between 10,000 and 50,000,000 VND"))]
+    #[validate(range(
+        min = 10000,
+        max = 50000000,
+        message = "Amount must be between 10,000 and 50,000,000 VND"
+    ))]
     #[validate(custom(function = "validate_divisible_by_1000"))]
     pub vnd_amount: i64,
 
@@ -114,7 +124,11 @@ pub struct ManualDepositRequest {
     pub user_id: String,
 
     /// Trust amount to deposit
-    #[validate(range(min = 1, max = 1000000, message = "Amount must be between 1 and 1,000,000 Trust"))]
+    #[validate(range(
+        min = 1,
+        max = 1000000,
+        message = "Amount must be between 1 and 1,000,000 Trust"
+    ))]
     pub trust_amount: i64,
 
     /// Reason for manual deposit (required)
@@ -152,7 +166,11 @@ pub struct DepositResponse {
 #[serde(rename_all = "camelCase")]
 pub struct DepositInitiateRequest {
     /// VND amount (must be divisible by 1000)
-    #[validate(range(min = 10000, max = 50000000, message = "Amount must be between 10,000 and 50,000,000 VND"))]
+    #[validate(range(
+        min = 10000,
+        max = 50000000,
+        message = "Amount must be between 10,000 and 50,000,000 VND"
+    ))]
     #[validate(custom(function = "validate_divisible_by_1000"))]
     pub amount_vnd: i64,
 
@@ -262,7 +280,11 @@ pub struct DepositHistoryResponse {
 #[serde(rename_all = "camelCase")]
 pub struct WithdrawalRequest {
     /// Trust amount to withdraw
-    #[validate(range(min = 10, max = 100000, message = "Amount must be between 10 and 100,000 Trust"))]
+    #[validate(range(
+        min = 10,
+        max = 100000,
+        message = "Amount must be between 10 and 100,000 Trust"
+    ))]
     pub trust_amount: i64,
 
     /// Bank information
@@ -414,7 +436,6 @@ pub struct SellerCancelRequest {
 // ADMIN OPERATION DTOs
 // ============================================================================
 
-/// Admin manual debit request
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AdminDebitRequest {
@@ -425,12 +446,28 @@ pub struct AdminDebitRequest {
     #[validate(range(min = 1))]
     pub trust_amount: i64,
 
-    #[validate(length(min = 10, max = 500))]
+    #[validate(length(min = 20, max = 500))]
     pub reason: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     #[validate(length(max = 1000))]
     pub note: Option<String>,
+
+    #[serde(default)]
+    pub allow_debt: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminDebitResponse {
+    pub wallet_id: String,
+    pub user_id: String,
+    pub requested_amount: i64,
+    pub actual_deducted: i64,
+    pub debt_created: i64,
+    pub new_available: i64,
+    pub new_admin_debt: i64,
+    pub debt_id: Option<String>,
 }
 
 /// Admin wallet freeze request
@@ -1162,7 +1199,11 @@ pub struct AdminManualDepositRequest {
     pub target_user_id: String,
 
     /// Trust amount to deposit (min 1, max 1,000,000)
-    #[validate(range(min = 1, max = 1000000, message = "Amount must be between 1 and 1,000,000 Trust"))]
+    #[validate(range(
+        min = 1,
+        max = 1000000,
+        message = "Amount must be between 1 and 1,000,000 Trust"
+    ))]
     pub trust_amount: i64,
 
     /// Reason for manual deposit (min 10 chars)
@@ -1175,9 +1216,15 @@ pub struct AdminManualDepositRequest {
     pub note: Option<String>,
 }
 
-fn default_page() -> i64 { 1 }
-fn default_per_page() -> i64 { 20 }
-fn default_admin_per_page() -> i64 { 50 }
+fn default_page() -> i64 {
+    1
+}
+fn default_per_page() -> i64 {
+    20
+}
+fn default_admin_per_page() -> i64 {
+    50
+}
 
 // ============================================================================
 // DASHBOARD STATS DTOs
@@ -1251,4 +1298,3 @@ pub struct UsdtDepositsSummary {
 // ============================================================================
 // VALIDATION FUNCTIONS
 // ============================================================================
-
