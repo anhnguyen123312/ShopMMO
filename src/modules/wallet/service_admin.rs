@@ -1,67 +1,104 @@
-//! Wallet V3 Service Layer - PART 3: Admin Operations
-//!
-//! Admin-only operations: manual debit, freeze/unfreeze, commission config
-
 use bson::DateTime as BsonDateTime;
 
 use crate::core::error::ServiceError;
 use super::{dto::*, domain::*, service::WalletService};
 
 impl WalletService {
-    // ========================================================================
-    // ADMIN: MANUAL DEBIT
-    // ========================================================================
-
-    /// Manual debit from wallet (admin only)
     pub async fn manual_debit(
         &self,
         req: ManualDebitRequest,
         admin_id: String,
-    ) -> Result<SuccessResponse, ServiceError> {
-        // Get wallet
+    ) -> Result<AdminDebitResponse, ServiceError> {
         let mut wallet = self
             .repo
             .find_wallet_by_user_id(&req.user_id)
             .await?
             .ok_or_else(|| ServiceError::NotFound("Wallet not found".to_string()))?;
 
-        // Check if sufficient balance
-        if wallet.available_trust < req.trust_amount {
-            return Err(ServiceError::BadRequest(
-                "Insufficient available balance".to_string(),
-            ));
+        let available = wallet.available_trust;
+        let requested = req.trust_amount;
+
+        let (actual_deduct, debt_amount) = if available >= requested {
+            (requested, 0)
+        } else if req.allow_debt {
+            (available, requested - available)
+        } else {
+            return Err(ServiceError::BadRequest(format!(
+                "Insufficient balance. Available: {} Trust, Requested: {} Trust. Enable allow_debt to create debt.",
+                available, requested
+            )));
+        };
+
+        let mut session = self.repo.start_session().await?;
+        session.start_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to start transaction: {}", e)))?;
+
+        let balance_before = wallet.available_trust;
+        let mut debt_id: Option<String> = None;
+
+        if actual_deduct > 0 {
+            let tx_id = Self::generate_id("TXN");
+            let balance_after = balance_before - actual_deduct;
+
+            let tx = Transaction::new(
+                tx_id.clone(),
+                wallet.wallet_id.clone(),
+                wallet.user_id.clone(),
+                TransactionType::AdminDebit,
+                Direction::Debit,
+                actual_deduct,
+                balance_before,
+                balance_after,
+                BalanceType::Available,
+                admin_id.clone(),
+            );
+
+            wallet.available_trust -= actual_deduct;
+            wallet.total_trust -= actual_deduct;
+
+            self.repo.create_transaction_with_session(tx, &mut session).await?;
         }
 
-        // Create transaction
-        let tx_id = Self::generate_id("TXN");
-        let balance_before = wallet.available_trust;
-        let balance_after = balance_before - req.trust_amount;
+        if debt_amount > 0 {
+            let new_debt_id = Self::generate_id("DEBT");
+            debt_id = Some(new_debt_id.clone());
 
-        let tx = Transaction::new(
-            tx_id.clone(),
-            wallet.wallet_id.clone(),
-            wallet.user_id.clone(),
-            TransactionType::DebitManual,
-            Direction::Debit,
-            req.trust_amount,
-            balance_before,
-            balance_after,
-            BalanceType::Available,
-            admin_id.clone(),
-        );
+            let debt_tx = AdminDebtTransaction::new(
+                new_debt_id.clone(),
+                wallet.wallet_id.clone(),
+                wallet.user_id.clone(),
+                requested,
+                actual_deduct,
+                debt_amount,
+                req.reason.clone(),
+                admin_id.clone(),
+            );
 
-        // Update wallet
-        wallet.available_trust -= req.trust_amount;
-        wallet.total_trust -= req.trust_amount;
+            wallet.admin_debt += debt_amount;
+            wallet.admin_debt_reason = Some(req.reason.clone());
+            wallet.admin_debt_created_by = Some(admin_id.clone());
+            wallet.admin_debt_created_at = Some(BsonDateTime::now());
 
-        // Validate invariant
+            self.repo.create_admin_debt_transaction_with_session(debt_tx, &mut session).await?;
+
+            let debt_tx_record = Transaction::new(
+                Self::generate_id("TXN"),
+                wallet.wallet_id.clone(),
+                wallet.user_id.clone(),
+                TransactionType::AdminDebit,
+                Direction::Debit,
+                0,
+                wallet.available_trust,
+                wallet.available_trust,
+                BalanceType::Available,
+                admin_id.clone(),
+            );
+            self.repo.create_transaction_with_session(debt_tx_record, &mut session).await?;
+        }
+
         Self::validate_invariant(&wallet)?;
+        self.repo.update_wallet_with_session(&wallet, &mut session).await?;
 
-        // Save to database
-        self.repo.create_transaction(tx).await?;
-        self.repo.update_wallet(&wallet).await?;
-
-        // Create admin log
         let log = AdminOperationLog {
             id: None,
             log_id: Self::generate_id("ALOG"),
@@ -71,55 +108,95 @@ impl WalletService {
             operation: AdminOperation::ManualDebit,
             target_type: TargetType::Wallet,
             target_id: wallet.wallet_id.clone(),
-            before_state: serde_json::json!({"available_trust": balance_before}),
-            after_state: serde_json::json!({"available_trust": balance_after}),
-            amount: Some(req.trust_amount),
+            before_state: serde_json::json!({
+                "available_trust": balance_before,
+                "admin_debt": wallet.admin_debt - debt_amount
+            }),
+            after_state: serde_json::json!({
+                "available_trust": wallet.available_trust,
+                "admin_debt": wallet.admin_debt
+            }),
+            amount: Some(requested),
             reason: req.reason,
             note: req.note,
-            transaction_id: Some(tx_id),
+            transaction_id: debt_id.clone(),
             ip_address: "0.0.0.0".to_string(),
             user_agent: "".to_string(),
             created_at: BsonDateTime::now(),
         };
-        self.repo.create_admin_log(log).await?;
+        self.repo.create_admin_log_with_session(log, &mut session).await?;
 
-        Ok(SuccessResponse::new(format!(
-            "Successfully debited {} Trust from wallet",
-            req.trust_amount
-        )))
+        session.commit_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to commit transaction: {}", e)))?;
+
+        Ok(AdminDebitResponse {
+            wallet_id: wallet.wallet_id,
+            user_id: wallet.user_id,
+            requested_amount: requested,
+            actual_deducted: actual_deduct,
+            debt_created: debt_amount,
+            new_available: wallet.available_trust,
+            new_admin_debt: wallet.admin_debt,
+            debt_id,
+        })
     }
 
     // ========================================================================
     // ADMIN: FREEZE/UNFREEZE WALLET
     // ========================================================================
 
-    /// Freeze wallet (prevent all operations)
     pub async fn freeze_wallet(
         &self,
         req: FreezeWalletRequest,
         admin_id: String,
     ) -> Result<SuccessResponse, ServiceError> {
-        // Get wallet
         let mut wallet = self
             .repo
             .find_wallet_by_user_id(&req.user_id)
             .await?
             .ok_or_else(|| ServiceError::NotFound("Wallet not found".to_string()))?;
 
-        // Check if already frozen
-        if wallet.status == WalletStatus::Frozen {
-            return Err(ServiceError::BadRequest(
-                "Wallet is already frozen".to_string(),
-            ));
+        let lock_amount = req.amount.unwrap_or(wallet.available_trust);
+
+        if lock_amount > wallet.available_trust {
+            return Err(ServiceError::BadRequest(format!(
+                "Cannot lock {} Trust. Available: {} Trust",
+                lock_amount, wallet.available_trust
+            )));
         }
 
-        let before_status = wallet.status.clone();
-        wallet.status = WalletStatus::Frozen;
-        wallet.updated_at = BsonDateTime::now();
+        let mut session = self.repo.start_session().await?;
+        session.start_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to start transaction: {}", e)))?;
 
-        self.repo.update_wallet(&wallet).await?;
+        let before_available = wallet.available_trust;
+        let before_dispute_locked = wallet.dispute_locked;
 
-        // Create admin log
+        wallet.available_trust -= lock_amount;
+        wallet.dispute_locked += lock_amount;
+
+        let full_freeze = wallet.available_trust == 0;
+        if full_freeze {
+            wallet.status = WalletStatus::Suspended;
+            wallet.freeze_reason = Some(req.reason.clone());
+        }
+
+        Self::validate_invariant(&wallet)?;
+
+        let lock_id = Self::generate_id("LOCK");
+        let dispute_lock = DisputeLock::new(
+            lock_id.clone(),
+            wallet.wallet_id.clone(),
+            wallet.user_id.clone(),
+            lock_amount,
+            req.reason.clone(),
+            req.case_reference.clone(),
+            admin_id.clone(),
+        );
+
+        self.repo.create_dispute_lock_with_session(dispute_lock, &mut session).await?;
+        self.repo.update_wallet_with_session(&wallet, &mut session).await?;
+
         let log = AdminOperationLog {
             id: None,
             log_id: Self::generate_id("ALOG"),
@@ -129,51 +206,77 @@ impl WalletService {
             operation: AdminOperation::FreezeWallet,
             target_type: TargetType::Wallet,
             target_id: wallet.wallet_id.clone(),
-            before_state: serde_json::json!({"status": before_status}),
-            after_state: serde_json::json!({"status": WalletStatus::Frozen}),
-            amount: None,
+            before_state: serde_json::json!({
+                "available_trust": before_available,
+                "dispute_locked": before_dispute_locked
+            }),
+            after_state: serde_json::json!({
+                "available_trust": wallet.available_trust,
+                "dispute_locked": wallet.dispute_locked
+            }),
+            amount: Some(lock_amount),
             reason: req.reason,
             note: Some(req.case_reference),
-            transaction_id: None,
+            transaction_id: Some(lock_id.clone()),
             ip_address: "0.0.0.0".to_string(),
             user_agent: "".to_string(),
             created_at: BsonDateTime::now(),
         };
-        self.repo.create_admin_log(log).await?;
+        self.repo.create_admin_log_with_session(log, &mut session).await?;
+
+        session.commit_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to commit transaction: {}", e)))?;
 
         Ok(SuccessResponse::new(format!(
-            "Wallet {} has been frozen",
-            wallet.wallet_id
+            "Locked {} Trust for wallet {}. Lock ID: {}",
+            lock_amount, wallet.wallet_id, lock_id
         )))
     }
 
-    /// Unfreeze wallet
     pub async fn unfreeze_wallet(
         &self,
         req: UnfreezeWalletRequest,
         admin_id: String,
     ) -> Result<SuccessResponse, ServiceError> {
-        // Get wallet
         let mut wallet = self
             .repo
             .find_wallet_by_user_id(&req.user_id)
             .await?
             .ok_or_else(|| ServiceError::NotFound("Wallet not found".to_string()))?;
 
-        // Check if frozen
-        if wallet.status != WalletStatus::Frozen {
+        let active_locks = self.repo.find_active_dispute_locks(&wallet.wallet_id).await?;
+
+        if active_locks.is_empty() {
             return Err(ServiceError::BadRequest(
-                "Wallet is not frozen".to_string(),
+                "No active locks on this wallet".to_string(),
             ));
         }
 
-        let before_status = wallet.status.clone();
-        wallet.status = WalletStatus::Active;
-        wallet.updated_at = BsonDateTime::now();
+        let mut session = self.repo.start_session().await?;
+        session.start_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to start transaction: {}", e)))?;
 
-        self.repo.update_wallet(&wallet).await?;
+        let before_available = wallet.available_trust;
+        let before_dispute_locked = wallet.dispute_locked;
 
-        // Create admin log
+        let mut total_released = 0i64;
+        for mut lock in active_locks {
+            lock.resolve(admin_id.clone(), req.resolution_note.clone());
+            self.repo.update_dispute_lock_with_session(&lock, &mut session).await?;
+
+            wallet.dispute_locked -= lock.amount;
+            wallet.available_trust += lock.amount;
+            total_released += lock.amount;
+        }
+
+        if wallet.dispute_locked == 0 && wallet.status == WalletStatus::Suspended {
+            wallet.status = WalletStatus::Active;
+            wallet.freeze_reason = None;
+        }
+
+        Self::validate_invariant(&wallet)?;
+        self.repo.update_wallet_with_session(&wallet, &mut session).await?;
+
         let log = AdminOperationLog {
             id: None,
             log_id: Self::generate_id("ALOG"),
@@ -183,21 +286,30 @@ impl WalletService {
             operation: AdminOperation::UnfreezeWallet,
             target_type: TargetType::Wallet,
             target_id: wallet.wallet_id.clone(),
-            before_state: serde_json::json!({"status": before_status}),
-            after_state: serde_json::json!({"status": WalletStatus::Active}),
-            amount: None,
-            reason: "Wallet unfrozen".to_string(),
+            before_state: serde_json::json!({
+                "available_trust": before_available,
+                "dispute_locked": before_dispute_locked
+            }),
+            after_state: serde_json::json!({
+                "available_trust": wallet.available_trust,
+                "dispute_locked": wallet.dispute_locked
+            }),
+            amount: Some(total_released),
+            reason: "Wallet unlocked".to_string(),
             note: Some(req.resolution_note),
             transaction_id: None,
             ip_address: "0.0.0.0".to_string(),
             user_agent: "".to_string(),
             created_at: BsonDateTime::now(),
         };
-        self.repo.create_admin_log(log).await?;
+        self.repo.create_admin_log_with_session(log, &mut session).await?;
+
+        session.commit_transaction().await
+            .map_err(|e| ServiceError::DatabaseError(format!("Failed to commit transaction: {}", e)))?;
 
         Ok(SuccessResponse::new(format!(
-            "Wallet {} has been unfrozen",
-            wallet.wallet_id
+            "Released {} Trust for wallet {}",
+            total_released, wallet.wallet_id
         )))
     }
 

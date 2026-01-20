@@ -1189,9 +1189,224 @@ impl WalletRepository {
             None => Ok((0, 0)),
         }
     }
+
+    pub async fn get_admin_debt_collection(&self) -> Collection<AdminDebtTransaction> {
+        self.client
+            .database("mmo")
+            .collection("admin_debt_transactions")
+    }
+
+    pub async fn create_admin_debt_transaction_with_session(
+        &self,
+        debt: AdminDebtTransaction,
+        session: &mut ClientSession,
+    ) -> Result<AdminDebtTransaction, DbError> {
+        let collection = self.get_admin_debt_collection().await;
+        collection
+            .insert_one(&debt)
+            .session(&mut *session)
+            .await?;
+        Ok(debt)
+    }
+
+    pub async fn find_active_admin_debt(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<AdminDebtTransaction>, DbError> {
+        let collection = self.get_admin_debt_collection().await;
+        collection
+            .find_one(doc! {
+                "user_id": user_id,
+                "status": { "$in": ["PENDING", "PARTIAL"] }
+            })
+            .await
+            .map_err(DbError::from)
+    }
+
+    pub async fn update_admin_debt_transaction_with_session(
+        &self,
+        debt: &AdminDebtTransaction,
+        session: &mut ClientSession,
+    ) -> Result<(), DbError> {
+        let collection = self.get_admin_debt_collection().await;
+        let mut updated = debt.clone();
+        updated.updated_at = BsonDateTime::now();
+        collection
+            .replace_one(doc! { "debt_id": &debt.debt_id }, &updated)
+            .session(&mut *session)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn find_admin_debt_by_user(
+        &self,
+        user_id: &str,
+        limit: i64,
+    ) -> Result<Vec<AdminDebtTransaction>, DbError> {
+        let collection = self.get_admin_debt_collection().await;
+        let cursor = collection
+            .find(doc! { "user_id": user_id })
+            .sort(doc! { "created_at": -1 })
+            .limit(limit)
+            .await?;
+        cursor.try_collect().await.map_err(Into::into)
+    }
+
+    pub async fn sum_all_wallet_balances(&self) -> Result<i64, DbError> {
+        let pipeline = vec![
+            doc! { "$match": { "user_id": { "$ne": "PLATFORM" } } },
+            doc! { "$group": { "_id": null, "total": { "$sum": "$total_trust" } } },
+        ];
+        let mut cursor = self.wallets.aggregate(pipeline).await?;
+        if let Some(doc) = cursor.try_next().await? {
+            Ok(doc.get_i64("total").unwrap_or(0))
+        } else {
+            Ok(0)
+        }
+    }
+
+    pub async fn sum_all_deposits(&self) -> Result<i64, DbError> {
+        let pipeline = vec![
+            doc! {
+                "$match": {
+                    "tx_type": { "$in": ["DEPOSIT_TRUST_CREDITED", "DEPOSIT_MANUAL"] },
+                    "status": "COMPLETED"
+                }
+            },
+            doc! { "$group": { "_id": null, "total": { "$sum": "$amount" } } },
+        ];
+        let mut cursor = self.transactions.aggregate(pipeline).await?;
+        if let Some(doc) = cursor.try_next().await? {
+            Ok(doc.get_i64("total").unwrap_or(0))
+        } else {
+            Ok(0)
+        }
+    }
+
+    pub async fn sum_all_withdrawals(&self) -> Result<i64, DbError> {
+        let pipeline = vec![
+            doc! {
+                "$match": {
+                    "tx_type": "WITHDRAWAL_COMPLETED",
+                    "status": "COMPLETED"
+                }
+            },
+            doc! { "$group": { "_id": null, "total": { "$sum": "$amount" } } },
+        ];
+        let mut cursor = self.transactions.aggregate(pipeline).await?;
+        if let Some(doc) = cursor.try_next().await? {
+            Ok(doc.get_i64("total").unwrap_or(0))
+        } else {
+            Ok(0)
+        }
+    }
+
+    pub async fn sum_vnd_deposits(&self) -> Result<i64, DbError> {
+        let pipeline = vec![
+            doc! {
+                "$match": {
+                    "tx_type": { "$in": ["DEPOSIT_TRUST_CREDITED", "DEPOSIT_MANUAL"] },
+                    "status": "COMPLETED"
+                }
+            },
+            doc! { "$group": { "_id": null, "total": { "$sum": "$vnd_amount" } } },
+        ];
+        let mut cursor = self.transactions.aggregate(pipeline).await?;
+        if let Some(doc) = cursor.try_next().await? {
+            Ok(doc.get_i64("total").unwrap_or(0))
+        } else {
+            Ok(0)
+        }
+    }
+
+    pub async fn sum_all_commission(&self) -> Result<i64, DbError> {
+        let pipeline = vec![
+            doc! {
+                "$match": {
+                    "tx_type": { "$in": ["COMMISSION_DEDUCT", "COMMISSION_COLLECTED"] }
+                }
+            },
+            doc! { "$group": { "_id": null, "total": { "$sum": "$amount" } } },
+        ];
+        let mut cursor = self.transactions.aggregate(pipeline).await?;
+        if let Some(doc) = cursor.try_next().await? {
+            Ok(doc.get_i64("total").unwrap_or(0))
+        } else {
+            Ok(0)
+        }
+    }
+
+    pub async fn sum_withdrawal_vnd(&self) -> Result<i64, DbError> {
+        let pipeline = vec![
+            doc! { "$match": { "status": "COMPLETED" } },
+            doc! { "$group": { "_id": null, "total": { "$sum": "$vnd_amount" } } },
+        ];
+        let mut cursor = self.withdrawal_requests.aggregate(pipeline).await?;
+        if let Some(doc) = cursor.try_next().await? {
+            Ok(doc.get_i64("total").unwrap_or(0))
+        } else {
+            Ok(0)
+        }
+    }
+
+    // ========================================================================
+    // DISPUTE LOCK OPERATIONS
+    // ========================================================================
+
+    /// Get dispute locks collection
+    pub async fn get_dispute_locks_collection(&self) -> Collection<DisputeLock> {
+        self.client
+            .database("mmo")
+            .collection("dispute_locks")
+    }
+
+    /// Create a dispute lock with session (for transaction)
+    pub async fn create_dispute_lock_with_session(
+        &self,
+        lock: DisputeLock,
+        session: &mut ClientSession,
+    ) -> Result<DisputeLock, DbError> {
+        let collection = self.get_dispute_locks_collection().await;
+        collection
+            .insert_one(&lock)
+            .session(&mut *session)
+            .await?;
+        Ok(lock)
+    }
+
+    /// Find active dispute locks for a wallet
+    pub async fn find_active_dispute_locks(
+        &self,
+        wallet_id: &str,
+    ) -> Result<Vec<DisputeLock>, DbError> {
+        let collection = self.get_dispute_locks_collection().await;
+        let cursor = collection
+            .find(doc! {
+                "wallet_id": wallet_id,
+                "status": "ACTIVE"
+            })
+            .sort(doc! { "created_at": -1 })
+            .await?;
+        cursor.try_collect().await.map_err(Into::into)
+    }
+
+    /// Update a dispute lock with session (for transaction)
+    pub async fn update_dispute_lock_with_session(
+        &self,
+        lock: &DisputeLock,
+        session: &mut ClientSession,
+    ) -> Result<(), DbError> {
+        let collection = self.get_dispute_locks_collection().await;
+        let mut updated = lock.clone();
+        updated.updated_at = BsonDateTime::now();
+        collection
+            .replace_one(doc! { "lock_id": &lock.lock_id }, &updated)
+            .session(&mut *session)
+            .await?;
+        Ok(())
+    }
 }
 
-/// USDT deposits summary
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UsdtDepositsSummary {
     pub pending_count: i64,

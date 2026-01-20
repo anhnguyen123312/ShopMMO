@@ -224,16 +224,15 @@ impl WalletService {
             .ok_or_else(|| ServiceError::NotFound("Seller wallet not found".to_string()))?;
 
         let commission_amount = escrow.commission_amount.unwrap_or(0);
-        let net_to_seller = escrow.amount - commission_amount;
+        let gross_to_seller = escrow.amount - commission_amount;
 
-        // Use MongoDB transaction
         let mut session = self.repo.start_session().await?;
         session.start_transaction().await
             .map_err(|e| ServiceError::DatabaseError(format!("Failed to start transaction: {}", e)))?;
 
         let now = BsonDateTime::now();
+        let initiated_by = admin_id.clone().unwrap_or_else(|| "SYSTEM".to_string());
 
-        // 1. Deduct from platform wallet
         let platform_balance_before = platform_wallet.available_trust;
         platform_wallet.available_trust -= escrow.amount;
         platform_wallet.total_trust -= escrow.amount;
@@ -250,16 +249,56 @@ impl WalletService {
             platform_balance_before,
             platform_wallet.available_trust,
             BalanceType::Available,
-            admin_id.clone().unwrap_or_else(|| "SYSTEM".to_string()),
+            initiated_by.clone(),
         );
 
-        // 2. Add net amount to seller
+        let admin_debt_repaid = if seller_wallet.admin_debt > 0 {
+            let repay_amount = gross_to_seller.min(seller_wallet.admin_debt);
+            
+            if repay_amount > 0 {
+                seller_wallet.admin_debt -= repay_amount;
+                
+                if let Ok(Some(mut debt_tx)) = self.repo.find_active_admin_debt(&seller_wallet.user_id).await {
+                    debt_tx.add_repayment(
+                        repay_amount,
+                        DebtRepaymentSource::EscrowRelease,
+                        Some(escrow.order_id.clone()),
+                        None,
+                    );
+                    self.repo.update_admin_debt_transaction_with_session(&debt_tx, &mut session).await?;
+                }
+
+                if seller_wallet.admin_debt == 0 {
+                    seller_wallet.admin_debt_reason = None;
+                    seller_wallet.admin_debt_created_by = None;
+                    seller_wallet.admin_debt_created_at = None;
+                }
+
+                let repay_tx = Transaction::new(
+                    Self::generate_id("TXN"),
+                    seller_wallet.wallet_id.clone(),
+                    seller_wallet.user_id.clone(),
+                    TransactionType::AdminDebit,
+                    Direction::Debit,
+                    repay_amount,
+                    0,
+                    0,
+                    BalanceType::Available,
+                    "SYSTEM".to_string(),
+                );
+                self.repo.create_transaction_with_session(repay_tx, &mut session).await?;
+            }
+            repay_amount
+        } else {
+            0
+        };
+
+        let net_to_seller = gross_to_seller - admin_debt_repaid;
+
         let seller_balance_before = seller_wallet.available_trust;
         seller_wallet.available_trust += net_to_seller;
         seller_wallet.total_trust += net_to_seller;
-        seller_wallet.lifetime_received += net_to_seller;
-
-        // 3. Add commission to seller's debt
+        seller_wallet.lifetime_received += gross_to_seller;
         seller_wallet.commission_debt += commission_amount;
 
         Self::validate_invariant(&seller_wallet)?;
@@ -275,15 +314,13 @@ impl WalletService {
             seller_balance_before,
             seller_wallet.available_trust,
             BalanceType::Available,
-            admin_id.clone().unwrap_or_else(|| "SYSTEM".to_string()),
+            initiated_by.clone(),
         );
 
-        // 4. Update escrow status
         escrow.status = EscrowStatus::Released;
         escrow.released_at = Some(now);
         escrow.updated_at = now;
 
-        // Save to database
         self.repo
             .create_transaction_with_session(platform_tx, &mut session)
             .await?;
@@ -303,10 +340,19 @@ impl WalletService {
         session.commit_transaction().await
             .map_err(|e| ServiceError::DatabaseError(format!("Failed to commit transaction: {}", e)))?;
 
-        Ok(SuccessResponse::new(format!(
-            "Escrow {} released to seller. Net: {} Trust, Commission: {} Trust",
-            escrow_id, net_to_seller, commission_amount
-        )))
+        let msg = if admin_debt_repaid > 0 {
+            format!(
+                "Escrow {} released. Gross: {} Trust, Debt repaid: {} Trust, Net to seller: {} Trust, Commission: {} Trust",
+                escrow_id, gross_to_seller, admin_debt_repaid, net_to_seller, commission_amount
+            )
+        } else {
+            format!(
+                "Escrow {} released to seller. Net: {} Trust, Commission: {} Trust",
+                escrow_id, net_to_seller, commission_amount
+            )
+        };
+
+        Ok(SuccessResponse::new(msg))
     }
 
     // ========================================================================
