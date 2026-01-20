@@ -30,7 +30,10 @@ use crate::middleware::AuthUser;
 ///     Ok(wallet)
 /// }
 /// ```
-pub fn check_ownership(auth_user: &AuthUser, resource_user_id: &str) -> Result<(), crate::core::ApiError> {
+pub fn check_ownership(
+    auth_user: &AuthUser,
+    resource_user_id: &str,
+) -> Result<(), crate::core::ApiError> {
     // Admin and SUPER_ADMIN can access any resource
     if auth_user.role == "ADMIN" || auth_user.role == "SUPER_ADMIN" {
         return Ok(());
@@ -42,7 +45,7 @@ pub fn check_ownership(auth_user: &AuthUser, resource_user_id: &str) -> Result<(
     }
 
     Err(crate::core::ApiError::forbidden(
-        "You do not have permission to access this resource"
+        "You do not have permission to access this resource",
     ))
 }
 
@@ -58,7 +61,10 @@ pub fn check_ownership(auth_user: &AuthUser, resource_user_id: &str) -> Result<(
 /// # Returns
 /// * `Ok(())` - User can modify the resource
 /// * `Err(ApiError)` - User cannot modify the resource
-pub fn check_modify_permission(auth_user: &AuthUser, resource_user_id: &str) -> Result<(), crate::core::ApiError> {
+pub fn check_modify_permission(
+    auth_user: &AuthUser,
+    resource_user_id: &str,
+) -> Result<(), crate::core::ApiError> {
     check_ownership(auth_user, resource_user_id)
 }
 
@@ -108,6 +114,7 @@ mod tests {
         AuthUser {
             user_id: user_id.to_string(),
             wallet_id: format!("WLT-{}", user_id),
+            username: format!("user_{}", user_id),
             email: format!("{}@test.com", user_id),
             role: role.to_string(),
             roles,
@@ -137,7 +144,8 @@ mod tests {
     #[test]
     fn test_is_admin() {
         let admin = create_test_user("admin123", "ADMIN", vec!["ADMIN".to_string()]);
-        let super_admin = create_test_user("super123", "SUPER_ADMIN", vec!["SUPER_ADMIN".to_string()]);
+        let super_admin =
+            create_test_user("super123", "SUPER_ADMIN", vec!["SUPER_ADMIN".to_string()]);
         let user = create_test_user("user123", "BUYER", vec!["BUYER".to_string()]);
 
         assert!(is_admin(&admin));
@@ -147,7 +155,11 @@ mod tests {
 
     #[test]
     fn test_has_role() {
-        let user = create_test_user("user123", "BUYER", vec!["BUYER".to_string(), "SELLER".to_string()]);
+        let user = create_test_user(
+            "user123",
+            "BUYER",
+            vec!["BUYER".to_string(), "SELLER".to_string()],
+        );
 
         assert!(has_role(&user, "BUYER"));
         assert!(has_role(&user, "SELLER"));
@@ -156,7 +168,11 @@ mod tests {
 
     #[test]
     fn test_has_any_role() {
-        let user = create_test_user("user123", "BUYER", vec!["BUYER".to_string(), "SELLER".to_string()]);
+        let user = create_test_user(
+            "user123",
+            "BUYER",
+            vec!["BUYER".to_string(), "SELLER".to_string()],
+        );
 
         assert!(has_any_role(&user, &["BUYER", "ADMIN"]));
         assert!(has_any_role(&user, &["SELLER", "ADMIN"]));
