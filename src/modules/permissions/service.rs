@@ -2,7 +2,6 @@
 //!
 //! Business logic for permission and role management.
 
-use std::sync::Arc;
 use mongodb::Database;
 
 use super::repository::{PermissionRepository, RoleRepository};
@@ -54,7 +53,7 @@ impl PermissionService {
         // Validate permissions
         for perm in &permissions {
             if !is_valid_permission(perm) {
-                return Err(ApiError::bad_request(&format!(
+                return Err(ApiError::bad_request(format!(
                     "Invalid permission: {}. Valid permissions are: {:?}",
                     perm,
                     all_permissions()
@@ -70,7 +69,7 @@ impl PermissionService {
             .map_err(|e| ApiError::database(e.to_string()))?;
 
         if existing.is_some() {
-            return Err(ApiError::bad_request(&format!(
+            return Err(ApiError::bad_request(format!(
                 "Role '{}' already exists",
                 name
             )));
@@ -110,7 +109,7 @@ impl PermissionService {
         // Validate permissions
         for perm in &permissions {
             if !is_valid_permission(perm) {
-                return Err(ApiError::bad_request(&format!(
+                return Err(ApiError::bad_request(format!(
                     "Invalid permission: {}",
                     perm
                 )));
@@ -139,7 +138,7 @@ impl PermissionService {
             .find_by_name(role_name)
             .await
             .map_err(|e| ApiError::database(e.to_string()))?
-            .ok_or_else(|| ApiError::not_found(&format!("Role '{}' not found", role_name)))?;
+            .ok_or_else(|| ApiError::not_found(format!("Role '{}' not found", role_name)))?;
 
         // Prevent deleting system roles
         if role.is_system {
@@ -184,7 +183,7 @@ impl PermissionService {
             .find_by_name(role_name)
             .await
             .map_err(|e| ApiError::database(e.to_string()))?
-            .ok_or_else(|| ApiError::not_found(&format!("Role '{}' not found", role_name)))?;
+            .ok_or_else(|| ApiError::not_found(format!("Role '{}' not found", role_name)))?;
 
         // Parse user_id
         let oid = bson::oid::ObjectId::parse_str(user_id)

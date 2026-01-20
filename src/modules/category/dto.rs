@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
 
-use super::domain::CategoryStatus;
 
 /// Create category request (admin only)
 #[derive(Debug, Deserialize, Validate, ToSchema)]

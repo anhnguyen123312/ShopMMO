@@ -11,7 +11,7 @@ use serde_json::json;
 
 use crate::core::error::ServiceError;
 use crate::database::RedisDB;
-use super::{repository::ShopRepository, domain::{Shop, ShopCompletionStatus, ShopLevel, ShopStatus}};
+use super::{repository::ShopRepository, domain::{Shop, ShopCompletionStatus}};
 use super::dto::*;
 
 /// Shop service

@@ -5,7 +5,6 @@
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 use utoipa::ToSchema;
-use mongodb::bson::oid::ObjectId;
 
 use super::domain::Role;
 

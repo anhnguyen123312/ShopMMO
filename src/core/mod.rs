@@ -18,4 +18,4 @@ pub use errors as error;
 
 // Re-export commonly used types
 pub use errors::{ApiError, DbError, ServiceError};
-pub use response::{ApiResponse, MessageResponse, PaginatedResponse};
+pub use response::{ApiResponse, MessageResponse};

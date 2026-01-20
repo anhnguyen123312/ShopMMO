@@ -54,17 +54,14 @@ pub struct User {
 /// User account status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum UserStatus {
     Active,
     Suspended,
+    #[default]
     PendingVerification,
 }
 
-impl Default for UserStatus {
-    fn default() -> Self {
-        Self::PendingVerification
-    }
-}
 
 /// Refresh token document in MongoDB
 #[derive(Debug, Clone, Serialize, Deserialize)]

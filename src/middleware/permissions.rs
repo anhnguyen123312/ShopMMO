@@ -104,7 +104,7 @@ async fn get_permissions_from_db(
             // Cache hit - verify version
             match cache.check_permission_atomic(
                 &auth_user.user_id,
-                &permissions.first().unwrap_or(&String::new()),
+                permissions.first().unwrap_or(&String::new()),
                 auth_user.perm_version as i32,
             ).await {
                 Ok(Some(_)) => permissions, // Cache valid
@@ -156,7 +156,7 @@ impl FromRequest for AuthUserV2 {
     type Future = Ready<Result<Self, Self::Error>>;
 
     fn from_request(
-        req: &HttpRequest,
+        _req: &HttpRequest,
         _: &mut Payload,
     ) -> Self::Future {
         // For now, return error if not authenticated

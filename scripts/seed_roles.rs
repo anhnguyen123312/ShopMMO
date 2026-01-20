@@ -226,7 +226,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if existing.is_some() {
             println!("  Role '{}' already exists, skipping...", role.name);
         } else {
-            roles_collection.insert_one(role.clone()).await?;
+            roles_collection.insert_one(role).await?;
             println!("  Created role: {} (level: {}, {} permissions)",
                 role.name, role.level, role.flattened_permissions.len());
         }

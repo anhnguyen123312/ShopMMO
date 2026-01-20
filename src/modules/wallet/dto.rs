@@ -8,10 +8,9 @@ use validator::Validate;
 use utoipa::ToSchema;
 
 use super::domain::{
-    BalanceType, CheckResult, Direction, EscrowStatus, Severity, SnapshotStatus,
+    BalanceType, Direction, EscrowStatus, Severity, SnapshotStatus,
     TransactionStatus, TransactionType, ValidationResult, WalletStatus, WalletType,
-    WithdrawalStatus, UsdtNetwork, UsdtDepositStatus, UsdtDeposit,
-    DisputeStatus, DisputeType, DisputeReason, SellerAction,
+    WithdrawalStatus,
 };
 
 // ============================================================================

@@ -19,7 +19,6 @@ use actix_web::{middleware::Logger, web, App, HttpServer};
 use actix_web_grants::GrantsMiddleware;
 use std::sync::Arc;
 use tracing_actix_web::TracingLogger;
-use utoipa::OpenApi;
 
 mod config;
 mod core;
@@ -65,7 +64,7 @@ async fn main() -> std::io::Result<()> {
     let redis = RedisDB::connect(&config)
         .await
         .expect("Failed to connect to Redis");
-    let redis = Arc::new(redis);
+    let _redis = Arc::new(redis);
 
     // Initialize repositories
     let user_repo = Arc::new(modules::auth::UserRepository::new(mongodb.clone()));

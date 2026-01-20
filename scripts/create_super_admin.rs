@@ -114,7 +114,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "mongodb://localhost:27017".to_string()
         });
 
-    println!("Connecting to MongoDB at: {}", mongo_url.split('@').last().unwrap_or(&mongo_url));
+    println!("Connecting to MongoDB at: {}", mongo_url.split('@').next_back().unwrap_or(&mongo_url));
     let client = Client::with_uri_str(&mongo_url).await?;
     let db = client.database("mmo_api");
     let users_collection: Collection<User> = db.collection("users");

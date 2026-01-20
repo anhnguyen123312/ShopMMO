@@ -9,7 +9,5 @@ pub mod repository;
 pub mod routes;
 pub mod service;
 
-pub use domain::{Category, CategoryStatus};
-pub use dto::*;
 pub use repository::CategoryRepository;
 pub use service::CategoryService;

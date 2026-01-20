@@ -208,7 +208,7 @@ impl WalletUsdtService {
             uid
         } else {
             // Try to parse user_id from memo
-            self.parse_user_id_from_memo(&memo.as_ref().map(|s| s.as_str()).unwrap_or_default())
+            self.parse_user_id_from_memo(memo.as_deref().unwrap_or_default())
                 .ok_or_else(|| {
                     ServiceError::ValidationFailed(
                         "Cannot determine user - no valid memo provided".to_string(),

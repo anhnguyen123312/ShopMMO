@@ -91,7 +91,7 @@ impl RoleRepository {
     }
 
     pub async fn get_user_permissions(&self, user_id: &str) -> Result<UserPermissions, DbError> {
-        use mongodb::bson::Bson;
+        
 
         let user_doc = self.users_collection
             .find_one(doc! { "_id": user_id })

@@ -3,10 +3,9 @@
 //! Admin-only operations: manual debit, freeze/unfreeze, commission config
 
 use bson::DateTime as BsonDateTime;
-use std::sync::Arc;
 
 use crate::core::error::ServiceError;
-use super::{dto::*, repository::WalletRepository, domain::*, service::WalletService};
+use super::{dto::*, domain::*, service::WalletService};
 
 impl WalletService {
     // ========================================================================

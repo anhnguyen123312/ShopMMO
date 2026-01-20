@@ -3,11 +3,9 @@
 //! Purchase flow, escrow release, and dispute handling
 
 use bson::{doc, DateTime as BsonDateTime};
-use chrono::{Duration, Utc};
-use std::sync::Arc;
 
 use crate::core::error::ServiceError;
-use super::{dto::*, repository::WalletRepository, domain::*, service::WalletService};
+use super::{dto::*, domain::*, service::WalletService};
 
 const VND_TO_TRUST_RATE: i64 = 1000;
 const ESCROW_HOLD_HOURS: i64 = 72; // 3 days
@@ -196,7 +194,7 @@ impl WalletService {
     async fn release_escrow_internal(
         &self,
         escrow_id: &str,
-        release_type: ReleaseType,
+        _release_type: ReleaseType,
         admin_id: Option<String>,
     ) -> Result<SuccessResponse, ServiceError> {
         // Get escrow
@@ -319,7 +317,7 @@ impl WalletService {
     pub async fn create_dispute(
         &self,
         escrow_id: &str,
-        req: CreateDisputeRequest,
+        _req: CreateDisputeRequest,
         user_id: String,
     ) -> Result<SuccessResponse, ServiceError> {
         // Get escrow
@@ -542,9 +540,7 @@ impl WalletService {
         };
         self.repo.create_admin_log(log).await?;
 
-        Ok(SuccessResponse::new(format!(
-            "Dispute resolved with release. Money released to seller.",
-        )))
+        Ok(SuccessResponse::new("Dispute resolved with release. Money released to seller.".to_string()))
     }
 
     // ========================================================================
@@ -553,7 +549,7 @@ impl WalletService {
 
     /// Process auto-release for all escrows past their hold period
     pub async fn process_auto_releases(&self) -> Result<ProcessAutoReleaseResponse, ServiceError> {
-        let now = BsonDateTime::now();
+        let _now = BsonDateTime::now();
         let escrows = self.repo.find_escrows_ready_for_release().await?;
 
         let mut released_count = 0;
@@ -808,7 +804,7 @@ impl WalletService {
             }
             BuyerDisputeDecision::Escalate => {
                 // Validate escalation message
-                if req.message.is_none() || req.message.as_ref().map_or(false, |m| m.len() < 20) {
+                if req.message.is_none() || req.message.as_ref().is_some_and(|m| m.len() < 20) {
                     return Err(ServiceError::BadRequest(
                         "Escalation message must be at least 20 characters".to_string(),
                     ));
@@ -1259,7 +1255,7 @@ impl WalletService {
     /// Get disputes list for user
     pub async fn get_disputes_list(
         &self,
-        user_id: &str,
+        _user_id: &str,
         query: DisputeListQuery,
     ) -> Result<DisputeListResponse, ServiceError> {
         let page = query.page.max(1);

@@ -86,7 +86,7 @@ impl AuthService {
         // Create wallet automatically
         let user_id = created_user.id.unwrap().to_hex();
         if let Some(wallet_service) = &self.wallet_service {
-            let wallet_id = format!("WLT-{}", user_id);
+            let _wallet_id = format!("WLT-{}", user_id);
             match wallet_service.create_wallet(user_id.clone(), WalletType::User).await {
                 Ok(wallet) => {
                     tracing::info!(

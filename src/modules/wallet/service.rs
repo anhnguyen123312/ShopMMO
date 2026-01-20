@@ -892,7 +892,7 @@ impl WalletService {
         })
     }
 
-    async fn validate_flow(&self, wallet: &Wallet, withdrawal_amount: i64) -> Result<CheckResult, ServiceError> {
+    async fn validate_flow(&self, wallet: &Wallet, _withdrawal_amount: i64) -> Result<CheckResult, ServiceError> {
         // Simplified flow validation
         let expected_balance =
             wallet.lifetime_deposited - wallet.lifetime_withdrawn + wallet.lifetime_received - wallet.lifetime_spent;
@@ -956,7 +956,7 @@ impl WalletService {
         })
     }
 
-    async fn validate_limits(&self, wallet: &Wallet, withdrawal_amount: i64) -> Result<CheckResult, ServiceError> {
+    async fn validate_limits(&self, _wallet: &Wallet, withdrawal_amount: i64) -> Result<CheckResult, ServiceError> {
         // Check per-transaction limits
         if withdrawal_amount < 10 {
             return Ok(CheckResult {
