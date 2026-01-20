@@ -10,7 +10,6 @@ use crate::config::AppConfig;
 use crate::middleware::{AuthUser, AdminUser};
 use super::dto::*;
 use super::service::ShopService;
-use super::domain::{ShopStatus, ShopLevel};
 use std::sync::Arc;
 
 // ============================================================================

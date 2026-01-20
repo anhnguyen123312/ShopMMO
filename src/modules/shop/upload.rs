@@ -42,7 +42,7 @@ pub async fn upload_logo(
             // Update shop with new logo
             use super::dto::UpdateShopRequest;
 
-            let update_req = UpdateShopRequest {
+            let _update_req = UpdateShopRequest {
                 shop_name: None,
                 shop_description: None,
                 shop_logo: Some(file_url.clone()),
@@ -92,7 +92,7 @@ pub async fn upload_banner(
             // Update shop with new banner
             use super::dto::UpdateShopRequest;
 
-            let update_req = UpdateShopRequest {
+            let _update_req = UpdateShopRequest {
                 shop_name: None,
                 shop_description: None,
                 shop_logo: None,
@@ -164,7 +164,7 @@ fn process_base64_image(
     // Generate unique filename
     let unique_filename = format!("{}-{}.{}", uuid::Uuid::new_v4(), file_type, image_type);
     let storage_dir = format!("storage/shops/{}/{}", shop_id, file_type);
-    let file_path = format!("{}/{}", storage_dir, unique_filename);
+    let _file_path = format!("{}/{}", storage_dir, unique_filename);
 
     // In a real implementation, save the file to disk or cloud storage
     // For now, we'll return a URL path
@@ -180,10 +180,10 @@ fn process_base64_image(
 ///
 /// DELETE /api/vendor/shop/file/{file_type}/{filename}
 pub async fn delete_file(
-    auth: AuthUser,
+    _auth: AuthUser,
     path: web::Path<(String, String)>,
 ) -> Result<HttpResponse, Error> {
-    let (file_type, filename) = path.into_inner();
+    let (file_type, _filename) = path.into_inner();
 
     // Validate file type
     if file_type != "logo" && file_type != "banner" {

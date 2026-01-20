@@ -4,12 +4,12 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::time::{interval, Instant};
+use tokio::time::interval;
 use tracing::{info, warn, error};
 use chrono::Timelike;
 
 use crate::core::error::ServiceError;
-use super::{dto::*, repository::WalletRepository, domain::*, service::WalletService};
+use super::{dto::*, service::WalletService};
 
 /// Duration for escrow auto-release check (every 5 minutes)
 const ESCROW_CHECK_INTERVAL: Duration = Duration::from_secs(300);
@@ -146,7 +146,7 @@ impl WalletCronManager {
     /// Background job: USDT TRC20 deposit monitoring
     ///
     /// Polls blockchain for new USDT transactions every 30 seconds
-    async fn run_usdt_monitor(service: Arc<WalletService>) {
+    async fn run_usdt_monitor(_service: Arc<WalletService>) {
         let mut timer = interval(USDT_MONITOR_INTERVAL);
         timer.tick().await;
 

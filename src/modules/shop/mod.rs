@@ -14,19 +14,3 @@ pub mod routes;
 pub mod upload;
 
 // Re-export commonly used types
-pub use domain::{Shop, ShopStatus, ShopLevel};
-pub use dto::{
-    // Create/Update requests
-    CreateShopRequest,
-    UpdateShopRequest,
-    UpdateShopPoliciesRequest,
-
-    // Responses
-    ShopResponse,
-    ShopDetailResponse,
-    ShopVerificationResponse,
-    ShopDashboardResponse,
-
-    // Telegram
-    TelegramVerifyRequest,
-};

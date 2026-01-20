@@ -1346,7 +1346,7 @@ impl DisputeCase {
 
     /// Check if dispute can be auto-escalated (buyer no response)
     pub fn should_auto_escalate_buyer(&self) -> bool {
-        if let Some(deadline) = self.buyer_deadline {
+        if let Some(_deadline) = self.buyer_deadline {
             (self.status == DisputeStatus::SellerResponded
                 || self.status == DisputeStatus::BuyerResponded)
                 && self.is_buyer_deadline_passed()
@@ -1357,7 +1357,7 @@ impl DisputeCase {
 
     /// Check if dispute can be auto-resolved (buyer no response, seller accepted)
     pub fn can_auto_resolve(&self) -> bool {
-        if let Some(deadline) = self.buyer_deadline {
+        if let Some(_deadline) = self.buyer_deadline {
             if let Some(action) = &self.seller_action {
                 return matches!(
                     action,
@@ -1422,7 +1422,7 @@ impl DisputeCase {
         let current_deadline = if let Some(existing) = self.new_deadline {
             existing
         } else {
-            self.seller_deadline.clone()
+            self.seller_deadline
         };
 
         let new_deadline = BsonDateTime::from_millis(
@@ -1432,7 +1432,7 @@ impl DisputeCase {
         self.extended_at = Some(now);
         self.extended_by = Some(admin_id);
         self.extension_days = Some(days);
-        self.new_deadline = Some(new_deadline.clone());
+        self.new_deadline = Some(new_deadline);
         self.extension_reason = Some(reason);
         self.seller_deadline = new_deadline;
         self.status = DisputeStatus::Extended;

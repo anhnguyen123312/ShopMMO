@@ -3,7 +3,7 @@
 //! Run with: cargo run --bin seed_permissions
 
 use mongodb::{
-    bson::{doc, oid::ObjectId, DateTime as BsonDateTime},
+    bson::{doc, oid::ObjectId},
     Client, Collection,
 };
 use tokio::main;
@@ -248,8 +248,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cursor = permissions_collection.find(doc! {}).await?;
     let all_permissions: Vec<Permission> = cursor.try_collect().await.map_err(|e| format!("Failed to collect: {}", e))?;
 
-    let buyer_perm_names = vec!["products:read", "orders:read", "orders:create", "wallets:read"];
-    let seller_perm_names = vec!["products:read", "products:create", "products:update", "products:delete", "orders:read", "orders:update", "wallets:read", "wallets:manage"];
+    let buyer_perm_names = ["products:read", "orders:read", "orders:create", "wallets:read"];
+    let seller_perm_names = ["products:read", "products:create", "products:update", "products:delete", "orders:read", "orders:update", "wallets:read", "wallets:manage"];
 
     let buyer_perm_ids: Vec<ObjectId> = all_permissions
         .iter()

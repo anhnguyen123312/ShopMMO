@@ -1,82 +1,131 @@
 # MMO API Server
 
-Production-ready Rust API server built with **actix-web** and **MongoDB**.
+Production-ready Rust API server for a marketplace/wallet system built with **actix-web**, **MongoDB**, and **Redis**.
 
-## 🚀 Features
+## Features
 
-- ✅ **JWT Authentication** - Access + Refresh token flow
-- ✅ **Role-Based Authorization** - Admin, User, Seller roles
-- ✅ **MongoDB** - Document database with connection pooling
-- ✅ **Redis** - Caching and session management
-- ✅ **Structured Logging** - Using tracing crate
-- ✅ **Error Handling** - Type-safe error handling with custom types
-- ✅ **Input Validation** - Request validation with validator crate
-- ✅ **CORS Support** - Configurable cross-origin requests
-- ✅ **Clean Architecture** - Modular design with clear separation of concerns
-- ✅ **Transaction Support** - MongoDB multi-document transactions
-- ✅ **Request Tracking** - Unique request IDs for tracing
+### Core Features
+- **JWT Authentication** - Access + Refresh token flow with V2 multi-role support
+- **Role-Based Authorization** - Dynamic RBAC with permission-based access control
+- **MongoDB** - Document database with connection pooling and transaction support
+- **Redis** - Caching and session management
+- **Structured Logging** - Using tracing crate with JSON format support
+- **Error Handling** - Type-safe 3-layer error handling (ApiError, ServiceError, DbError)
+- **Input Validation** - Request validation with validator crate
+- **CORS Support** - Configurable cross-origin requests
+- **OpenAPI/Swagger** - Auto-generated API documentation with utoipa
+- **Request Tracking** - Unique request IDs for distributed tracing
 
-## 📁 Project Structure
+### Business Modules
+- **Auth Module** - User registration, login, token refresh, password management
+- **Wallet Module** - Trust currency system with deposits, withdrawals, escrow
+- **Permissions Module** - Dynamic role and permission management
+- **Category Module** - Hierarchical category management
+- **Shop Module** - Marketplace shop management (in development)
+
+## Tech Stack
+
+| Component | Technology | Version |
+|-----------|-----------|---------|
+| Language | Rust | 2021 edition |
+| Web Framework | actix-web | 4.9 |
+| Database | MongoDB | 3.1 driver |
+| Cache | Redis | 0.27 |
+| Authentication | jsonwebtoken | 9.3 |
+| Password Hashing | bcrypt + argon2 | 0.15 / 0.5 |
+| Validation | validator | 0.18 |
+| Logging | tracing | 0.1 |
+| API Docs | utoipa | 5.4.0 |
+| Async Runtime | Tokio | 1.42 |
+
+## Project Structure
 
 ```
 mmo-api/
 ├── src/
-│   ├── main.rs                 # Application entry point
-│   ├── config/                 # Configuration management
-│   │   └── app.rs             # Environment-based config
-│   ├── core/                   # Core infrastructure
-│   │   ├── errors.rs          # Error types & handling
-│   │   ├── response.rs        # Standard API responses
-│   │   ├── logger.rs          # Logging setup
-│   │   └── validator.rs       # Custom validators
-│   ├── database/               # Database connections
-│   │   ├── mongodb.rs         # MongoDB client
-│   │   └── redis.rs           # Redis client
-│   ├── middleware/             # Middleware components
-│   │   ├── auth.rs            # JWT authentication
-│   │   ├── authorization.rs   # Role-based access control
-│   │   ├── cors.rs            # CORS configuration
-│   │   └── request_id.rs      # Request ID tracking
-│   ├── modules/                # Feature modules
-│   │   ├── auth/              # Authentication module
-│   │   │   ├── domain.rs      # Domain models (User, RefreshToken)
-│   │   │   ├── dto.rs         # Request/Response DTOs
-│   │   │   ├── handler.rs     # HTTP handlers
-│   │   │   ├── service.rs     # Business logic
-│   │   │   ├── repository.rs  # Database operations
-│   │   │   └── routes.rs      # Route definitions
-│   │   └── wallet/            # Wallet module (template)
-│   │       └── ...
-│   └── utils/                  # Utility functions
-│       ├── hash.rs            # Password hashing
-│       ├── jwt.rs             # JWT utilities
-│       ├── number_generator.rs # ID generation
-│       └── datetime.rs        # Date/time helpers
-├── Cargo.toml
-├── .env.example
-└── README.md
+│   ├── main.rs                    # Application entry point
+│   ├── lib.rs                     # Library exports
+│   ├── config/                    # Configuration management
+│   │   ├── mod.rs
+│   │   └── app.rs                 # Environment-based config
+│   ├── core/                      # Core infrastructure
+│   │   ├── mod.rs
+│   │   ├── errors.rs              # 3-layer error types (Api/Service/Db)
+│   │   ├── response.rs            # Standard API response wrapper
+│   │   ├── logger.rs              # Structured logging setup
+│   │   ├── validator.rs           # Custom validators
+│   │   └── ownership.rs           # Authorization helpers
+│   ├── database/                  # Database connections
+│   │   ├── mod.rs
+│   │   ├── mongodb.rs             # MongoDB client with pooling
+│   │   └── redis.rs               # Redis client
+│   ├── middleware/                # HTTP middleware
+│   │   ├── mod.rs
+│   │   ├── auth.rs                # JWT authentication
+│   │   ├── authorization.rs       # Role-based access control
+│   │   ├── permissions.rs         # Permission extraction
+│   │   ├── request_id.rs          # Request ID tracking
+│   │   └── cors.rs                # CORS configuration
+│   ├── modules/                   # Feature modules
+│   │   ├── mod.rs
+│   │   ├── auth/                  # Authentication module
+│   │   │   ├── domain.rs          # User, RefreshToken models
+│   │   │   ├── dto.rs             # Request/Response DTOs
+│   │   │   ├── handler.rs         # HTTP handlers
+│   │   │   ├── service.rs         # Business logic
+│   │   │   ├── repository.rs      # Database operations
+│   │   │   ├── routes.rs          # Route definitions
+│   │   │   └── mod.rs
+│   │   ├── wallet/                # Wallet module (V3)
+│   │   │   ├── domain.rs          # Wallet, Transaction, Escrow models
+│   │   │   ├── dto.rs             # DTOs
+│   │   │   ├── handler.rs         # HTTP handlers
+│   │   │   ├── service.rs         # Core wallet operations
+│   │   │   ├── service_escrow.rs  # Escrow operations
+│   │   │   ├── service_admin.rs   # Admin operations
+│   │   │   ├── service_usdt.rs    # USDT integration
+│   │   │   ├── service_cron.rs    # Background jobs
+│   │   │   ├── repository.rs      # Database operations
+│   │   │   ├── routes.rs          # Route definitions
+│   │   │   └── mod.rs
+│   │   ├── permissions/           # Permission management
+│   │   ├── category/              # Category management
+│   │   └── shop/                  # Shop management
+│   ├── utils/                     # Utility functions
+│   │   ├── mod.rs
+│   │   ├── jwt.rs                 # JWT token utilities
+│   │   ├── hash.rs                # Password hashing
+│   │   ├── datetime.rs            # Date/time helpers
+│   │   └── number_generator.rs    # ID generation
+│   └── openapi.rs                 # OpenAPI spec definition
+├── migrations/                    # Database migrations
+├── scripts/                       # Utility scripts
+├── docs/                          # Documentation
+│   └── v2/                        # V2 design documents
+├── Cargo.toml                     # Dependencies
+├── docker-compose.yml             # Docker Compose for local dev
+└── .env.example                   # Environment template
 ```
 
-## 🛠️ Prerequisites
+## Prerequisites
 
 - **Rust** 1.75+ (2021 edition)
 - **MongoDB** 4.4+
 - **Redis** 6.0+
 
-## 📦 Installation
+## Quick Start
 
-### 1. Clone the repository
+### 1. Clone and Setup
 
 ```bash
 git clone <repository-url>
 cd mmo-api
-```
 
-### 2. Set up environment variables
-
-```bash
+# Copy environment template
 cp .env.example .env
 ```
+
+### 2. Configure Environment
 
 Edit `.env` with your configuration:
 
@@ -85,10 +134,13 @@ Edit `.env` with your configuration:
 HOST=127.0.0.1
 PORT=8080
 RUST_LOG=info,mmo_api=debug
+SERVER_WORKERS=4
 
 # MongoDB
 MONGODB_URI=mongodb://localhost:27017
 MONGODB_DATABASE=mmo_db
+MONGODB_MAX_POOL_SIZE=100
+MONGODB_MIN_POOL_SIZE=10
 
 # Redis
 REDIS_URI=redis://localhost:6379
@@ -97,349 +149,381 @@ REDIS_URI=redis://localhost:6379
 JWT_SECRET=your-super-secret-jwt-key-change-in-production
 JWT_ACCESS_TOKEN_EXPIRES_IN=15m
 JWT_REFRESH_TOKEN_EXPIRES_IN=7d
+
+# Security
+BCRYPT_COST=12
 ```
 
-### 3. Install dependencies
+### 3. Start Dependencies
 
+Using Docker Compose:
 ```bash
-cargo build
+docker-compose up -d mongodb redis
 ```
 
-### 4. Run the server
-
-**Development:**
+Or start manually:
 ```bash
+# MongoDB
+mongod --dbpath /data/db
+
+# Redis
+redis-server
+```
+
+### 4. Build and Run
+
+```bash
+# Development
 cargo run
-```
 
-**Production (optimized):**
-```bash
+# Production (optimized)
 cargo build --release
 ./target/release/mmo-api
 ```
 
-## 🧪 Testing
+### 5. Seed Initial Data (Optional)
 
 ```bash
-# Run all tests
+# Seed permissions
+cargo run --bin seed_permissions
+
+# Seed roles
+cargo run --bin seed_roles
+
+# Create super admin
+cargo run --bin create_super_admin
+```
+
+## API Documentation
+
+### Swagger UI
+
+Start the Swagger server:
+```bash
+cargo run --bin swagger_server
+```
+
+Then visit: http://localhost:8081/swagger-ui/
+
+### Generate OpenAPI Spec
+
+```bash
+cargo run --bin generate_openapi
+# Output: swagger/openapi.json
+```
+
+## API Endpoints
+
+### Authentication
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | `/api/auth/register` | Register new user | No |
+| POST | `/api/auth/login` | Login | No |
+| POST | `/api/auth/refresh` | Refresh access token | No |
+| POST | `/api/auth/logout` | Logout | Yes |
+| GET | `/api/auth/me` | Get current user | Yes |
+| POST | `/api/auth/change-password` | Change password | Yes |
+| POST | `/api/auth/admin/assign-roles` | Assign roles to user | Admin |
+| GET | `/api/auth/admin/users/{id}/roles` | Get user roles | Admin |
+
+### Wallet
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/wallet/balance` | Get wallet balance | Yes |
+| POST | `/api/wallet/deposit/initiate` | Initiate deposit | Yes |
+| POST | `/api/wallet/withdraw` | Create withdrawal | Yes |
+| GET | `/api/wallet/transactions` | Transaction history | Yes |
+| POST | `/api/wallet/escrow/create` | Create escrow | Yes |
+| POST | `/api/wallet/escrow/release` | Release escrow | Yes |
+
+### Categories
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/categories/tree` | Get category tree | No |
+| GET | `/api/categories/{id}` | Get category by ID | No |
+| POST | `/api/admin/categories` | Create category | Admin |
+| PUT | `/api/admin/categories/{id}` | Update category | Admin |
+| DELETE | `/api/admin/categories/{id}` | Delete category | Admin |
+
+### Permissions
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/permissions/roles` | List all roles | Admin |
+| POST | `/api/permissions/roles` | Create role | Admin |
+| PUT | `/api/permissions/roles/{name}` | Update role | Admin |
+| DELETE | `/api/permissions/roles/{name}` | Delete role | Admin |
+
+## Request/Response Format
+
+### Standard Success Response
+
+```json
+{
+  "success": true,
+  "message": null,
+  "data": { /* payload */ },
+  "error": null
+}
+```
+
+### Standard Error Response
+
+```json
+{
+  "success": false,
+  "message": "Error description",
+  "data": null,
+  "error": {
+    "error": "Detailed error message",
+    "status_code": 400
+  }
+}
+```
+
+### Authentication Example
+
+**Register:**
+```bash
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "johndoe",
+    "email": "john@example.com",
+    "password": "SecurePass123",
+    "name": "John Doe"
+  }'
+```
+
+**Login:**
+```bash
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "identifier": "john@example.com",
+    "password": "SecurePass123"
+  }'
+```
+
+**Authenticated Request:**
+```bash
+curl -X GET http://localhost:8080/api/auth/me \
+  -H "Authorization: Bearer <access_token>"
+```
+
+## Development
+
+### Code Quality
+
+```bash
+# Format code
+cargo fmt
+
+# Lint with clippy
+cargo clippy
+
+# Run tests
 cargo test
 
-# Run with logging
-RUST_LOG=debug cargo test
-
-# Run specific test
-cargo test test_name
-```
-
-## 📚 API Documentation
-
-### Authentication Endpoints
-
-#### Register
-```http
-POST /api/auth/register
-Content-Type: application/json
-
-{
-  "email": "user@example.com",
-  "password": "Password123",
-  "name": "John Doe"
-}
-```
-
-#### Login
-```http
-POST /api/auth/login
-Content-Type: application/json
-
-{
-  "email": "user@example.com",
-  "password": "Password123"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "accessToken": "eyJhbGc...",
-    "refreshToken": "eyJhbGc...",
-    "tokenType": "Bearer",
-    "expiresIn": 900,
-    "user": {
-      "id": "507f1f77bcf86cd799439011",
-      "email": "user@example.com",
-      "name": "John Doe",
-      "role": "user"
-    }
-  }
-}
-```
-
-#### Refresh Token
-```http
-POST /api/auth/refresh
-Content-Type: application/json
-
-{
-  "refreshToken": "eyJhbGc..."
-}
-```
-
-#### Get Current User
-```http
-GET /api/auth/me
-Authorization: Bearer <access_token>
-```
-
-#### Change Password
-```http
-POST /api/auth/change-password
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "currentPassword": "OldPassword123",
-  "newPassword": "NewPassword456"
-}
-```
-
-#### Logout
-```http
-POST /api/auth/logout
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "refreshToken": "eyJhbGc..."
-}
-```
-
-### Wallet Endpoints
-
-#### Get Balance
-```http
-GET /api/wallet/balance
-Authorization: Bearer <access_token>
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "apCurrent": 5000,
-    "apPendingCashout": 2000,
-    "apTotal": 7000,
-    "vndEquivalent": 7000000
-  }
-}
-```
-
-## 🏗️ Module Development Guide
-
-### Creating a New Module
-
-Follow this structure for consistency:
-
-```
-modules/your_module/
-├── domain.rs      # MongoDB models
-├── dto.rs         # Request/Response DTOs
-├── handler.rs     # HTTP handlers
-├── service.rs     # Business logic
-├── repository.rs  # Database operations
-├── routes.rs      # Route configuration
-└── mod.rs         # Module exports
-```
-
-### Example: Adding a Product Module
-
-1. **Create domain models** (`domain.rs`):
-```rust
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Product {
-    #[serde(rename = "_id")]
-    pub id: Option<ObjectId>,
-    pub name: String,
-    pub price: i64,
-    // ...
-}
-```
-
-2. **Define DTOs** (`dto.rs`):
-```rust
-#[derive(Debug, Deserialize, Validate)]
-pub struct CreateProductRequest {
-    #[validate(length(min = 1))]
-    pub name: String,
-    #[validate(range(min = 0))]
-    pub price: i64,
-}
-```
-
-3. **Implement repository** (`repository.rs`):
-```rust
-pub struct ProductRepository {
-    collection: Collection<Product>,
-}
-
-impl ProductRepository {
-    pub async fn create(&self, product: Product) -> Result<Product, DbError> {
-        // ...
-    }
-}
-```
-
-4. **Implement service** (`service.rs`):
-```rust
-pub struct ProductService {
-    repo: Arc<ProductRepository>,
-}
-
-impl ProductService {
-    pub async fn create_product(&self, req: CreateProductRequest) -> Result<Product, ServiceError> {
-        // Business logic here
-    }
-}
-```
-
-5. **Implement handlers** (`handler.rs`):
-```rust
-pub async fn create_product(
-    service: web::Data<Arc<ProductService>>,
-    req: web::Json<CreateProductRequest>,
-    auth: AuthUser,
-) -> Result<HttpResponse, ApiError> {
-    req.validate()?;
-    let product = service.create_product(req.into_inner()).await?;
-    Ok(HttpResponse::Created().json(ApiResponse::success(product)))
-}
-```
-
-6. **Define routes** (`routes.rs`):
-```rust
-pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/products")
-            .route("", web::post().to(handler::create_product))
-            .route("", web::get().to(handler::list_products))
-    );
-}
-```
-
-7. **Register in main.rs**:
-```rust
-.configure(modules::product::routes::configure)
-```
-
-## 🔒 Security Best Practices
-
-1. **Environment Variables**: Never commit `.env` file
-2. **JWT Secret**: Use strong, random secret in production
-3. **Password Hashing**: Uses bcrypt with configurable cost
-4. **Input Validation**: All requests validated before processing
-5. **SQL Injection**: MongoDB uses BSON, no SQL injection risk
-6. **Rate Limiting**: Implement using actix-governor (TODO)
-
-## 📊 Database Indexes
-
-### Required Indexes
-
-```javascript
-// Users collection
-db.users.createIndex({ "email": 1 }, { unique: true })
-db.users.createIndex({ "created_at": -1 })
-
-// Refresh tokens collection
-db.refresh_tokens.createIndex({ "token": 1 }, { unique: true })
-db.refresh_tokens.createIndex({ "user_id": 1 })
-db.refresh_tokens.createIndex({ "expires_at": 1 })
-
-// Wallets collection
-db.wallets.createIndex({ "user_id": 1 }, { unique: true })
-db.wallets.createIndex({ "status": 1 })
-```
-
-## 🐛 Debugging
-
-### Enable debug logging
-
-```bash
+# Run with verbose logging
 RUST_LOG=debug cargo run
 ```
 
-### JSON logging (for production)
+### Adding a New Module
 
-```bash
-LOG_FORMAT=json cargo run
+1. Create module directory: `src/modules/your_module/`
+2. Add standard files:
+   - `domain.rs` - MongoDB models
+   - `dto.rs` - Request/Response DTOs
+   - `handler.rs` - HTTP handlers
+   - `service.rs` - Business logic
+   - `repository.rs` - Database operations
+   - `routes.rs` - Route configuration
+   - `mod.rs` - Module exports
+3. Register in `src/modules/mod.rs`
+4. Configure routes in `src/main.rs`
+
+See `docs/WORKFLOW_ADD_NEW_API.md` for detailed guide.
+
+## Database Indexes
+
+Run these in MongoDB shell for optimal performance:
+
+```javascript
+// Users
+db.users.createIndex({ "email": 1 }, { unique: true })
+db.users.createIndex({ "username": 1 }, { unique: true })
+
+// Refresh tokens
+db.refresh_tokens.createIndex({ "token": 1 }, { unique: true })
+db.refresh_tokens.createIndex({ "user_id": 1 })
+db.refresh_tokens.createIndex({ "expires_at": 1 }, { expireAfterSeconds: 0 })
+
+// Wallets
+db.wallets.createIndex({ "wallet_id": 1 }, { unique: true })
+db.wallets.createIndex({ "user_id": 1 }, { unique: true })
+
+// Transactions
+db.wallet_transactions.createIndex({ "tx_id": 1 }, { unique: true })
+db.wallet_transactions.createIndex({ "wallet_id": 1, "created_at": -1 })
+
+// Categories
+db.categories.createIndex({ "slug": 1 }, { unique: true })
+db.categories.createIndex({ "parent_id": 1 })
 ```
 
-### Common issues
+## Deployment
 
-1. **MongoDB connection failed**: Check `MONGODB_URI` in `.env`
-2. **Redis connection failed**: Ensure Redis is running on port 6379
-3. **JWT errors**: Verify `JWT_SECRET` is set correctly
-
-## 📝 Code Style
-
-This project follows Rust standard conventions:
-
-- Run `cargo fmt` before committing
-- Run `cargo clippy` to check for common mistakes
-- Follow the coding rules in `docs/CODING_STANDARDS.md`
-
-## 🚀 Deployment
-
-### Docker (Recommended)
+### Docker
 
 ```dockerfile
-# Dockerfile example
-FROM rust:1.75 as builder
+FROM rust:1.75-slim as builder
 WORKDIR /app
 COPY . .
-RUN cargo build --release
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && \
+    cargo build --release
 
 FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates libssl3 && \
+    rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/mmo-api /usr/local/bin/
+EXPOSE 8080
 CMD ["mmo-api"]
 ```
 
-### Systemd Service
+### Docker Compose (Production)
 
-```ini
-[Unit]
-Description=MMO API Server
-After=network.target
+```yaml
+version: '3.8'
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - RUST_LOG=info
+      - MONGODB_URI=mongodb://mongodb:27017
+      - REDIS_URI=redis://redis:6379
+    depends_on:
+      - mongodb
+      - redis
+    restart: always
 
-[Service]
-Type=simple
-User=mmo-api
-WorkingDirectory=/opt/mmo-api
-Environment="RUST_LOG=info"
-EnvironmentFile=/opt/mmo-api/.env
-ExecStart=/opt/mmo-api/mmo-api
-Restart=always
+  mongodb:
+    image: mongo:7
+    volumes:
+      - mongodb_data:/data/db
+    restart: always
 
-[Install]
-WantedBy=multi-user.target
+  redis:
+    image: redis:7-alpine
+    restart: always
+
+volumes:
+  mongodb_data:
 ```
 
-## 📖 Additional Documentation
+## Architecture
 
-- [Architecture Guide](docs/ARCHITECTURE.md)
-- [Coding Standards](docs/CODING_STANDARDS.md)
-- [Wallet V2 Design](../../docs/v2/01-wallet-system-design.md)
+### Request Flow
 
-## 📄 License
+```
+HTTP Request
+    │
+    ▼
+┌─────────────────────────┐
+│     Middleware Stack    │
+│  ├─ TracingLogger       │
+│  ├─ RequestId           │
+│  ├─ AuthMiddleware      │
+│  └─ GrantsMiddleware    │
+└─────────────────────────┘
+    │
+    ▼
+┌─────────────────────────┐
+│       Handler           │
+│  (validates input)      │
+└─────────────────────────┘
+    │
+    ▼
+┌─────────────────────────┐
+│       Service           │
+│  (business logic)       │
+└─────────────────────────┘
+    │
+    ▼
+┌─────────────────────────┐
+│      Repository         │
+│  (database operations)  │
+└─────────────────────────┘
+    │
+    ▼
+┌─────────────────────────┐
+│    MongoDB / Redis      │
+└─────────────────────────┘
+```
 
-[Your License Here]
+### Error Handling Chain
 
-## 👥 Contributors
+```
+DbError → ServiceError → ApiError → HTTP Response
+```
 
-[Your Team]
+## Documentation
 
-## 📞 Support
+- [Workflow: Add New API](docs/WORKFLOW_ADD_NEW_API.md)
+- [Wallet System Design](docs/v2/wallet/wallet-overview.md)
+- [Escrow Flow](docs/v2/wallet/escrow.md)
+- [Full Implementation Order](docs/v2/full-flows-implementation-order.md)
+
+## Troubleshooting
+
+### Common Issues
+
+1. **MongoDB connection failed**
+   - Check `MONGODB_URI` in `.env`
+   - Ensure MongoDB is running: `mongosh --eval "db.runCommand({ping:1})"`
+
+2. **Redis connection failed**
+   - Check `REDIS_URI` in `.env`
+   - Ensure Redis is running: `redis-cli ping`
+
+3. **JWT errors**
+   - Verify `JWT_SECRET` is set
+   - Check token expiration settings
+
+4. **Permission denied**
+   - Verify user has required roles
+   - Check role-permission mappings in database
+
+### Debug Logging
+
+```bash
+# All debug logs
+RUST_LOG=debug cargo run
+
+# Module-specific logging
+RUST_LOG=mmo_api::modules::auth=debug cargo run
+
+# JSON format (for production)
+LOG_FORMAT=json cargo run
+```
+
+## License
+
+[MIT License](LICENSE)
+
+## Contributing
+
+1. Fork the repository
+2. Create feature branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push to branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
+
+## Support
 
 For issues and questions, please open an issue on GitHub.

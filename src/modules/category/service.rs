@@ -5,14 +5,12 @@
 use bson::oid::ObjectId;
 use std::sync::Arc;
 
-use crate::{
-    core::{ServiceError, DbError},
-};
+use crate::core::ServiceError;
 
 use super::{
-    domain::{Category, CategoryStatus},
+    domain::Category,
     dto::{
-        CategoryOrderUpdate, CategoryResponse, CategoryTreeResponse, CreateCategoryRequest,
+        CategoryResponse, CategoryTreeResponse, CreateCategoryRequest,
         ReorderCategoriesRequest, UpdateCategoryRequest,
     },
     repository::CategoryRepository,

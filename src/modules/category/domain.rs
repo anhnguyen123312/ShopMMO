@@ -53,19 +53,16 @@ pub struct Category {
 /// Category status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum CategoryStatus {
     /// Category is active and visible
+    #[default]
     Active,
 
     /// Category has been soft deleted
     Deleted,
 }
 
-impl Default for CategoryStatus {
-    fn default() -> Self {
-        Self::Active
-    }
-}
 
 impl Category {
     /// Creates a new category

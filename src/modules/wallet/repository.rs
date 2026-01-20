@@ -2,13 +2,13 @@
 //!
 //! MongoDB database operations for wallet system
 
-use bson::{doc, oid::ObjectId, DateTime as BsonDateTime, Document};
-use mongodb::{Collection, Database, Client, options::{FindOneOptions, FindOptions}, ClientSession};
+use bson::{doc, DateTime as BsonDateTime, Document};
+use mongodb::{Collection, Client, ClientSession};
 use futures::stream::TryStreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
-use chrono::{TimeZone, Datelike, Timelike};
+use chrono::TimeZone;
 
 use crate::core::error::DbError;
 use crate::database::MongoDB;
@@ -198,7 +198,7 @@ impl WalletRepository {
         let cursor = self.transactions
             .find(doc! { "user_id": user_id })
             .sort(doc! { "created_at": -1 })
-            .skip(skip as u64)
+            .skip(skip)
             .limit(limit as i64)
             .await?;
         let transactions: Vec<Transaction> = cursor.try_collect().await?;
@@ -222,7 +222,7 @@ impl WalletRepository {
         let cursor = self.transactions
             .find(doc! {})
             .sort(doc! { "created_at": -1 })
-            .skip(skip as u64)
+            .skip(skip)
             .limit(limit as i64)
             .await?;
         let transactions: Vec<Transaction> = cursor.try_collect().await?;
@@ -726,7 +726,7 @@ impl WalletRepository {
     /// Update USDT deposit
     pub async fn update_usdt_deposit(&self, deposit: &UsdtDeposit) -> Result<UsdtDeposit, DbError> {
         let updated_deposit = UsdtDeposit {
-            id: deposit.id.clone(),
+            id: deposit.id,
             deposit_id: deposit.deposit_id.clone(),
             wallet_id: deposit.wallet_id.clone(),
             user_id: deposit.user_id.clone(),
@@ -766,7 +766,7 @@ impl WalletRepository {
         confirmations: i32,
         status: UsdtDepositStatus,
     ) -> Result<(), DbError> {
-        use serde_json;
+        
         let status_str = json!(status).as_str().unwrap_or("Pending").to_string();
         self.usdt_deposits
             .update_one(
@@ -804,7 +804,7 @@ impl WalletRepository {
         status: UsdtDepositStatus,
         limit: i64,
     ) -> Result<Vec<UsdtDeposit>, DbError> {
-        use serde_json;
+        
         let status_str = json!(status).as_str().unwrap_or("Pending").to_string();
         let cursor = self
             .usdt_deposits
@@ -818,7 +818,7 @@ impl WalletRepository {
     /// Get pending USDT deposits older than specified blocks
     pub async fn get_old_pending_deposits(
         &self,
-        max_block_age: i64,
+        _max_block_age: i64,
     ) -> Result<Vec<UsdtDeposit>, DbError> {
         // Get latest block number would be passed from service
         // For now, return all pending deposits
@@ -837,8 +837,7 @@ impl WalletRepository {
         let total = self
             .usdt_deposits
             .count_documents(doc! {})
-            .await
-            .map_err::<mongodb::error::Error, _>(Into::into)?;
+            .await?;
 
         let cursor = self
             .usdt_deposits
@@ -848,7 +847,7 @@ impl WalletRepository {
             .limit(per_page)
             .await?;
 
-        let deposits: Vec<UsdtDeposit> = cursor.try_collect().await.map_err::<mongodb::error::Error, _>(Into::into)?;
+        let deposits: Vec<UsdtDeposit> = cursor.try_collect().await?;
 
         Ok((deposits, total as i64))
     }
@@ -870,7 +869,7 @@ impl WalletRepository {
 
         let mut summary = UsdtDepositsSummary::default();
 
-        use mongodb::bson::{Document, Bson};
+        
         while let Some(result) = cursor.try_next().await.map_err(|e| DbError::MongoError(e.to_string()))? {
             let status_str = result.get_str("_id").unwrap_or("Unknown");
             let count = result.get_i64("count").unwrap_or(0);
@@ -1034,7 +1033,7 @@ impl WalletRepository {
         limit: i64,
     ) -> Result<Vec<DisputeCase>, DbError> {
         let collection = self.get_dispute_cases_collection().await;
-        use serde_json;
+        
         let status_str = json!(status).as_str().unwrap_or("PENDING").to_string();
         let cursor = collection
             .find(doc! { "status": status_str })
@@ -1107,8 +1106,7 @@ impl WalletRepository {
         let query_filter = filter.unwrap_or_else(|| doc! {});
         let total = collection
             .count_documents(query_filter.clone())
-            .await
-            .map_err::<mongodb::error::Error, _>(Into::into)? as i64;
+            .await? as i64;
 
         let cursor = collection
             .find(query_filter)
@@ -1135,7 +1133,7 @@ impl WalletRepository {
         // Use skip/limit in the query chain directly
         let cursor = self.wallets
             .find(doc! {})
-            .skip(skip as u64)
+            .skip(skip)
             .limit(limit as i64)
             .await
             .map_err(DbError::from)?;

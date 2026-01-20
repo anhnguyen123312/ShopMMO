@@ -4,7 +4,7 @@
 
 use bson::{doc, Document};
 use futures::stream::TryStreamExt;
-use mongodb::{Collection, Database};
+use mongodb::Collection;
 use std::sync::Arc;
 
 use crate::core::error::DbError;
@@ -73,7 +73,7 @@ impl ShopRepository {
 
     /// Delete shop (soft delete - update status)
     pub async fn soft_delete(&self, shop_id: &str) -> Result<(), DbError> {
-        use super::domain::ShopStatus;
+        
         self.shops
             .update_one(
                 doc! { "shop_id": shop_id },
@@ -107,7 +107,7 @@ impl ShopRepository {
             .shops
             .find(query_filter)
             .sort(query_sort)
-            .skip(skip as u64)
+            .skip(skip)
             .limit(limit)
             .await?;
 
@@ -141,7 +141,7 @@ impl ShopRepository {
             .shops
             .find(filter)
             .sort(doc! { "total_sales": -1 })
-            .skip(skip as u64)
+            .skip(skip)
             .limit(limit)
             .await?;
 
@@ -155,7 +155,7 @@ impl ShopRepository {
 
     /// Get total shops count
     pub async fn count_total(&self) -> Result<i64, DbError> {
-        Ok(self.count(None).await?)
+        self.count(None).await
     }
 
     /// Count active shops
@@ -192,7 +192,7 @@ impl ShopRepository {
 
     /// Count shops by level
     pub async fn count_by_level(&self) -> Result<ShopLevelStats, DbError> {
-        use serde_json;
+        
 
         let pipeline = vec![
             doc! {
@@ -301,7 +301,7 @@ impl ShopRepository {
     }
 
     /// Update shop rating
-    pub async fn update_rating(&self, shop_id: &str, new_rating: f64, increment_review: bool) -> Result<(), DbError> {
+    pub async fn update_rating(&self, shop_id: &str, _new_rating: f64, increment_review: bool) -> Result<(), DbError> {
         let mut update_doc = doc! {
             "$set": { "updated_at": bson::DateTime::now() }
         };

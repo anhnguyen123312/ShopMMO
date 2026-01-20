@@ -13,12 +13,7 @@ use crate::{
 };
 use super::{dto::*, service::WalletService, service_cron::WalletCronManager};
 // Domain types with ToSchema for OpenAPI responses
-use super::domain::{
-    WalletType, WalletStatus, TransactionType, Direction, BalanceType,
-    TransactionStatus, ReferenceType, WithdrawalStatus, Severity, SnapshotStatus,
-    EscrowStatus, ReleaseType, AdminOperation, TargetType, DepositStatus,
-    ValidationResult, CheckResult, ValidationError
-};
+use super::domain::ValidationResult;
 
 // ========================================================================
 // WALLET MANAGEMENT
@@ -286,7 +281,7 @@ pub async fn admin_manual_deposit(
 #[protect("ADMIN")]
 pub async fn admin_get_deposits_history(
     service: web::Data<Arc<WalletService>>,
-    admin: AdminUser,
+    _admin: AdminUser,
     query: web::Query<AdminDepositHistoryQuery>,
 ) -> Result<HttpResponse, ApiError> {
     let response = service
