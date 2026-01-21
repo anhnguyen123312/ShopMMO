@@ -56,64 +56,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ==========================================================================
-  # MMO API Application
-  # ==========================================================================
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: mmo-api
-    restart: unless-stopped
-    environment:
-      # Server
-      HOST: 0.0.0.0
-      PORT: 8080
-      ENVIRONMENT: development
-      RUST_LOG: info
-      
-      # MongoDB
-      MONGODB_URI: mongodb://mmo_admin:mmo_secret_password@mongodb:27017
-      MONGODB_DATABASE: mmo_db
-      MONGODB_MAX_POOL_SIZE: 100
-      MONGODB_MIN_POOL_SIZE: 10
-      
-      # Redis
-      REDIS_URI: redis://:mmo_redis_password@redis:6379
-      REDIS_POOL_SIZE: 10
-      
-      # JWT (change in production!)
-      JWT_SECRET: your-super-secret-jwt-key-change-in-production
-      JWT_ACCESS_TOKEN_EXPIRES_IN: 15m
-      JWT_REFRESH_TOKEN_EXPIRES_IN: 7d
-      
-      # Security
-      BCRYPT_COST: 12
-      PASSWORD_MIN_LENGTH: 8
-      
-      # Rate Limiting
-      RATE_LIMIT_PER_SECOND: 10
-      RATE_LIMIT_BURST_SIZE: 20
-      
-      # CORS
-      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
-      CORS_ALLOW_CREDENTIALS: true
-    ports:
-      - "8080:8080"
-    networks:
-      - mmo-network
-    depends_on:
-      mongodb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
 # ==========================================================================
 # Volumes
 # ==========================================================================
